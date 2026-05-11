@@ -4,9 +4,10 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Package, Waves, TrendingDown, ArrowRight, LogOut } from "lucide-react";
+import { Package, Waves, TrendingDown, ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import { SESSION_COOKIE, SESSION_VALUE, DEMO_CREDENTIALS } from "@/lib/auth/session";
+import { LogoutButton } from "@/components/layout/logout-button";
 
 export const metadata: Metadata = { title: "Dashboard — Operador" };
 
@@ -28,22 +29,7 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-bold text-slate-900">Panel de operador</h1>
               <p className="text-slate-500 text-sm mt-1">{DEMO_CREDENTIALS.email}</p>
             </div>
-            <form action="/api/auth/login" method="DELETE">
-              <Button
-                variant="outline"
-                size="sm"
-                formAction="/api/auth/login"
-                formMethod="post"
-                onClick={async () => {
-                  await fetch("/api/auth/login", { method: "DELETE" });
-                  window.location.href = "/";
-                }}
-                type="button"
-              >
-                <LogOut className="h-4 w-4" />
-                Salir
-              </Button>
-            </form>
+            <LogoutButton />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
