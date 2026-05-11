@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
 import { Package2, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -22,10 +21,13 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-    if (authError) {
+    if (!res.ok) {
       setError("Email o contraseña incorrectos.");
       setLoading(false);
       return;
@@ -45,7 +47,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>Iniciar sesión</CardTitle>
-          <CardDescription>Accede a tu cuenta para gestionar tus envíos</CardDescription>
+          <CardDescription>Accede al panel de operador</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-5">
@@ -56,7 +58,7 @@ export default function LoginPage() {
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="tu@empresa.com"
+                placeholder="operador@findit.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />

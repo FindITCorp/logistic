@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { preRegisterSchema } from "@/lib/validation/schemas";
-import { createServiceClient } from "@/lib/supabase/server";
+
+// In-memory store for Phase 1 validation — visible in server logs
+const leads: Array<{ email: string; name?: string; company?: string; volume?: number; ts: string }> = [];
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,26 +16,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createServiceClient();
-    const { error } = await supabase
-      .from("pre_registrations")
-      .insert({
-        email: parsed.data.email,
-        name: parsed.data.name ?? null,
-        company: parsed.data.company ?? null,
-        monthly_volume_m3: parsed.data.monthly_volume_m3 ?? null,
-        current_rate: parsed.data.current_rate ?? null,
-      });
+    const { email, name, company, monthly_volume_m3 } = parsed.data;
 
-    if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json({ message: "Ya estás registrado." }, { status: 200 });
-      }
-      throw error;
+    // Check duplicate in memory
+    if (leads.some((l) => l.email === email)) {
+      return NextResponse.json({ message: "Ya estás registrado." }, { status: 200 });
     }
+
+    const lead = { email, name, company, volume: monthly_volume_m3, ts: new Date().toISOString() };
+    leads.push(lead);
+
+    // Visible in Vercel / server logs
+    console.log("[FINDIT PRE-REGISTRO]", JSON.stringify(lead));
 
     return NextResponse.json({ message: "Registrado exitosamente." }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Error interno." }, { status: 500 });
   }
+}
+
+export async function GET() {
+  // Simple endpoint to view leads (protect in production)
+  return NextResponse.json({ total: leads.length, leads });
 }
