@@ -1,0 +1,66 @@
+name: Fix Vercel Protection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get project details
+        run: |
+          echo "=== PROJECT DETAILS ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v9/projects/logistic" | \
+            node -e "
+              const d=require('fs').readFileSync('/dev/stdin','utf8');
+              const p=JSON.parse(d);
+              console.log('ID:', p.id);
+              console.log('Name:', p.name);
+              console.log('Protection:', JSON.stringify(p.deploymentProtection || p.ssoProtection || 'none'));
+              console.log('Full keys:', Object.keys(p).join(', '));
+            "
+
+      - name: List all projects to find correct one
+        run: |
+          echo "=== ALL PROJECTS ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v9/projects?limit=10" | \
+            node -e "
+              const d=require('fs').readFileSync('/dev/stdin','utf8');
+              const data=JSON.parse(d);
+              (data.projects||[]).forEach(p=>{
+                console.log(p.id, p.name, p.link?.deployHooks,
+                  'protection:', JSON.stringify({
+                    sso: p.ssoProtection,
+                    password: p.passwordProtection,
+                    deployment: p.deploymentProtection
+                  }));
+              });
+            "
+
+      - name: Disable all protection types
+        run: |
+          PROJECT_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v9/projects" | \
+            node -e "
+              const d=require('fs').readFileSync('/dev/stdin','utf8');
+              const projects=JSON.parse(d).projects||[];
+              const p=projects.find(x=>x.name==='logistic')||projects[0];
+              if(p) console.log(p.id);
+            ")
+          echo "Using project ID: $PROJECT_ID"
+
+          curl -s -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID" \
+            -d '{
+              "ssoProtection": null,
+              "passwordProtection": null,
+              "trustedIps": null,
+              "deploymentProtection": "none"
+            }' | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); console.log('PATCH result:', d.substring(0,300))"
