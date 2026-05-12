@@ -24,6 +24,24 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel
-        run: vercel deploy --yes --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          URL=$(vercel deploy --yes --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -o 'https://[^ ]*vercel\.app' | tail -1)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $URL"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Disable deployment protection
+        run: |
+          PROJECT_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            "https://api.vercel.com/v9/projects/logistic" | \
+            node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); console.log(JSON.parse(d).id)")
+          echo "Project ID: $PROJECT_ID"
+          curl -s -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.vercel.com/v9/projects/$PROJECT_ID" \
+            -d '{"ssoProtection":null,"passwordProtection":null}'
+          echo "Deployment protection disabled"
