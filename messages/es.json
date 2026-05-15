@@ -57,7 +57,8 @@
     "step2Title": "2. El precio baja con el volumen",
     "step2Desc": "A medida que más importadores se unen y el volumen sube de tramo, el costo del naviero baja y el ahorro distribuible aumenta para todos.",
     "step3Title": "3. Cada cliente ve su precio",
-    "step3Desc": "Tu precio se actualiza en tiempo real según el volumen actual del pool y el día en que entraste. Nunca pagas más del precio de referencia."
+    "step3Desc": "Tu precio se actualiza en tiempo real según el volumen actual del pool y el día en que entraste. Nunca pagas más del precio de referencia.",
+    "cta": "Ver pools activos"
   },
   "transparency": {
     "title": "Transparencia total",

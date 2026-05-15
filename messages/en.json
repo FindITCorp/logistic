@@ -57,7 +57,8 @@
     "step2Title": "2. Price drops with volume",
     "step2Desc": "As more importers join and volume crosses thresholds, the carrier cost drops and distributable savings increase for everyone.",
     "step3Title": "3. Each client sees their price",
-    "step3Desc": "Your price updates in real time based on current pool volume and the day you joined. You never pay more than the reference price."
+    "step3Desc": "Your price updates in real time based on current pool volume and the day you joined. You never pay more than the reference price.",
+    "cta": "View active pools"
   },
   "transparency": {
     "title": "Full transparency",

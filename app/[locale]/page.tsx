@@ -1,43 +1,12 @@
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import Header from '@/components/Header';
-import PoolCard, { Pool } from '@/components/PoolCard';
-import PricingTierTable from '@/components/PricingTierTable';
-
-// Mock pools — currentDay simulates where the pool is in its 10-day lifecycle
-const MOCK_POOLS: Pool[] = [
-  {
-    id: '1',
-    origin: 'Shanghai',
-    destination: 'Colón',
-    volumeM3: 8.5,
-    participants: 6,
-    currentDay: 3,
-    departureDate: '2026-06-15',
-  },
-  {
-    id: '2',
-    origin: 'Guangzhou',
-    destination: 'Colón',
-    volumeM3: 2.1,
-    participants: 2,
-    currentDay: 1,
-    departureDate: '2026-06-28',
-  },
-  {
-    id: '3',
-    origin: 'Shenzhen',
-    destination: 'Colón',
-    volumeM3: 16.4,
-    participants: 11,
-    currentDay: 7,
-    departureDate: '2026-06-10',
-  },
-];
 
 function HeroSection() {
   const t = useTranslations('hero');
+  const locale = useLocale();
+
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-24 text-white">
+    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-28 text-white">
       <div className="absolute inset-0 opacity-10">
         <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white" />
         <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-white" />
@@ -58,13 +27,13 @@ function HeroSection() {
         </p>
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <a
-            href="#pools"
+            href={`/${locale}/pools`}
             className="rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-brand-700 shadow-lg hover:bg-blue-50 transition-colors"
           >
             {t('cta')}
           </a>
           <a
-            href="#how-it-works"
+            href={`/${locale}#how-it-works`}
             className="rounded-xl border border-white/30 bg-white/10 px-8 py-3.5 text-base font-semibold text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
           >
             {t('ctaSecondary')}
@@ -77,6 +46,7 @@ function HeroSection() {
 
 function HowItWorksSection() {
   const t = useTranslations('howItWorks');
+  const locale = useLocale();
   const steps = [
     { key: 'step1', icon: '🚀' },
     { key: 'step2', icon: '📉' },
@@ -102,30 +72,13 @@ function HowItWorksSection() {
             </div>
           ))}
         </div>
-      </div>
-    </section>
-  );
-}
-
-function PoolsSection() {
-  const t = useTranslations('pool');
-
-  return (
-    <section id="pools" className="py-20">
-      <div className="container">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-slate-900">{t('title')}</h2>
-          <p className="mt-3 text-slate-500 max-w-2xl mx-auto">{t('subtitle')}</p>
-        </div>
-
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {MOCK_POOLS.map((pool) => (
-            <PoolCard key={pool.id} pool={pool} />
-          ))}
-        </div>
-
-        <div className="mt-16">
-          <PricingTierTable />
+        <div className="mt-12 text-center">
+          <a
+            href={`/${locale}/pools`}
+            className="inline-block rounded-xl bg-brand-700 px-8 py-3.5 text-base font-semibold text-white hover:bg-brand-600 transition-colors"
+          >
+            {t('cta')}
+          </a>
         </div>
       </div>
     </section>
@@ -179,7 +132,6 @@ export default function HomePage() {
       <main>
         <HeroSection />
         <HowItWorksSection />
-        <PoolsSection />
         <TransparencySection />
       </main>
       <Footer />
