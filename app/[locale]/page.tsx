@@ -3,38 +3,33 @@ import Header from '@/components/Header';
 import PoolCard, { Pool } from '@/components/PoolCard';
 import PricingTierTable from '@/components/PricingTierTable';
 
+// Mock pools — currentDay simulates where the pool is in its 10-day lifecycle
 const MOCK_POOLS: Pool[] = [
   {
     id: '1',
     origin: 'Shanghai',
     destination: 'Colón',
-    referencePrice: 450,
-    currentBulkPrice: 380,
-    volumeM3: 14.5,
-    participants: 9,
-    daysActive: 12,
+    volumeM3: 8.5,
+    participants: 6,
+    currentDay: 3,
     departureDate: '2026-06-15',
   },
   {
     id: '2',
     origin: 'Guangzhou',
     destination: 'Colón',
-    referencePrice: 420,
-    currentBulkPrice: 410,
-    volumeM3: 4.2,
-    participants: 3,
-    daysActive: 4,
+    volumeM3: 2.1,
+    participants: 2,
+    currentDay: 1,
     departureDate: '2026-06-28',
   },
   {
     id: '3',
     origin: 'Shenzhen',
     destination: 'Colón',
-    referencePrice: 480,
-    currentBulkPrice: 350,
-    volumeM3: 18.8,
-    participants: 14,
-    daysActive: 22,
+    volumeM3: 16.4,
+    participants: 11,
+    currentDay: 7,
     departureDate: '2026-06-10',
   },
 ];
@@ -114,14 +109,13 @@ function HowItWorksSection() {
 
 function PoolsSection() {
   const t = useTranslations('pool');
-  const mainPool = MOCK_POOLS[0];
 
   return (
     <section id="pools" className="py-20">
       <div className="container">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-slate-900">{t('title')}</h2>
-          <p className="mt-3 text-slate-500 max-w-xl mx-auto">{t('subtitle')}</p>
+          <p className="mt-3 text-slate-500 max-w-2xl mx-auto">{t('subtitle')}</p>
         </div>
 
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -131,10 +125,7 @@ function PoolsSection() {
         </div>
 
         <div className="mt-16">
-          <PricingTierTable
-            referencePrice={mainPool.referencePrice}
-            currentSavingsPerM3={mainPool.referencePrice - mainPool.currentBulkPrice}
-          />
+          <PricingTierTable />
         </div>
       </div>
     </section>

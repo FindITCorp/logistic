@@ -1,15 +1,18 @@
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@/lib/pricing';
+import {
+  calculateClientPrice,
+  formatCurrency,
+  REFERENCE_PRICE,
+  POOL_DURATION_DAYS,
+} from '@/lib/pricing';
 
 export interface Pool {
   id: string;
   origin: string;
   destination: string;
-  referencePrice: number;
-  currentBulkPrice: number;
   volumeM3: number;
   participants: number;
-  daysActive: number;
+  currentDay: number;
   departureDate: string;
 }
 
@@ -19,12 +22,15 @@ interface PoolCardProps {
 
 export default function PoolCard({ pool }: PoolCardProps) {
   const t = useTranslations('pool');
-  const savingsPerM3 = pool.referencePrice - pool.currentBulkPrice;
-  const savingsPct = Math.round((savingsPerM3 / pool.referencePrice) * 100);
+
+  const todayResult = calculateClientPrice(pool.currentDay, pool.volumeM3);
   const progressPct = Math.min(100, Math.round((pool.volumeM3 / 20) * 100));
+  const dayProgressPct = Math.round((pool.currentDay / POOL_DURATION_DAYS) * 100);
+  const daysLeft = POOL_DURATION_DAYS - pool.currentDay + 1;
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md overflow-hidden">
+      {/* Header */}
       <div className="bg-gradient-to-r from-brand-700 to-brand-600 px-5 py-4 text-white">
         <div className="flex items-start justify-between">
           <div>
@@ -33,37 +39,54 @@ export default function PoolCard({ pool }: PoolCardProps) {
               {pool.origin} → {pool.destination}
             </h3>
           </div>
-          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
-            {pool.daysActive} {t('daysActive')}
-          </span>
+          <div className="text-right">
+            <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold">
+              {t('dayOf', { current: pool.currentDay, total: POOL_DURATION_DAYS })}
+            </span>
+            <p className="mt-1 text-xs text-blue-200">{daysLeft} {t('daysLeft')}</p>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 p-5">
+      <div className="flex-1 p-5 space-y-4">
+        {/* Price block */}
         <div className="flex items-end justify-between">
           <div>
             <p className="text-xs text-slate-500">{t('referencePrice')} *</p>
-            <p className="text-3xl font-bold text-slate-900">
-              {formatCurrency(pool.referencePrice)}
+            <p className="text-3xl font-bold text-slate-900 leading-none">
+              {formatCurrency(REFERENCE_PRICE)}
               <span className="text-base font-normal text-slate-500">/m³</span>
             </p>
           </div>
-          {savingsPerM3 > 0 && (
+
+          {todayResult.distributableSavings > 0 ? (
             <div className="text-right">
-              <p className="text-xs text-slate-500">{t('currentSavings')}</p>
-              <p className="text-xl font-bold text-emerald-600">
-                -{formatCurrency(savingsPerM3)}
+              <p className="text-xs text-slate-500">{t('yourPriceToday')}</p>
+              <p className="text-2xl font-bold text-emerald-600 leading-none">
+                {formatCurrency(todayResult.clientPrice)}
                 <span className="text-sm font-normal text-slate-500">/m³</span>
               </p>
-              <p className="text-xs text-emerald-600 font-medium">{savingsPct}% off</p>
+              <p className="text-xs text-emerald-600 font-medium">
+                -{formatCurrency(todayResult.clientDiscount)} ({todayResult.savingsPct}% {t('ofSavings')})
+              </p>
+            </div>
+          ) : (
+            <div className="text-right">
+              <p className="text-xs text-slate-500">{t('yourPriceToday')}</p>
+              <p className="text-2xl font-bold text-slate-700 leading-none">
+                {formatCurrency(REFERENCE_PRICE)}
+                <span className="text-sm font-normal text-slate-500">/m³</span>
+              </p>
+              <p className="text-xs text-slate-400">{t('noSavingsYet')}</p>
             </div>
           )}
         </div>
 
-        <div className="mt-4">
+        {/* Volume progress */}
+        <div>
           <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>{t('volume')}: {pool.volumeM3} {t('m3')} · {pool.participants} {t('participants')}</span>
-            <span>{progressPct}%</span>
+            <span>{t('volume')}: <strong>{pool.volumeM3} m³</strong> · {pool.participants} {t('participants')}</span>
+            <span className="text-slate-400">{progressPct}% {t('ofMaxVolume')}</span>
           </div>
           <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -71,15 +94,35 @@ export default function PoolCard({ pool }: PoolCardProps) {
               style={{ width: `${progressPct}%` }}
             />
           </div>
+          <div className="flex justify-between text-xs text-slate-400 mt-1">
+            <span>0</span>
+            <span>5m³</span>
+            <span>15m³</span>
+            <span>20m³+</span>
+          </div>
         </div>
 
-        <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-          <p className="text-xs text-amber-700">
-            * {t('referenceNote')}
-          </p>
+        {/* Day progress */}
+        <div>
+          <div className="flex justify-between text-xs text-slate-500 mb-1">
+            <span>{t('poolProgress')}</span>
+            <span>{t('dayOf', { current: pool.currentDay, total: POOL_DURATION_DAYS })}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-400 transition-all"
+              style={{ width: `${dayProgressPct}%` }}
+            />
+          </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        {/* Reference note */}
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+          <p className="text-xs text-amber-700">* {t('referenceNote')}</p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-1">
           <div className="text-xs text-slate-500">
             <span className="font-medium text-slate-700">{t('departure')}:</span>{' '}
             {pool.departureDate}
