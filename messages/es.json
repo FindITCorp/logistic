@@ -1,0 +1,68 @@
+{
+  "nav": {
+    "howItWorks": "Cómo funciona",
+    "pools": "Pools activos",
+    "login": "Iniciar sesión",
+    "signup": "Registrarse"
+  },
+  "hero": {
+    "badge": "Consolidación LCL China → Panamá",
+    "title": "Reduce tu costo de importación hasta un",
+    "titleHighlight": "90%",
+    "subtitle": "Únete a un pool de carga y comparte el flete con otros importadores. Cuanto más volumen se acumula, menor el precio por m³ para todos.",
+    "cta": "Ver pools activos",
+    "ctaSecondary": "Cómo funciona"
+  },
+  "pool": {
+    "title": "Pools Activos",
+    "subtitle": "El precio de referencia es el máximo. Tu precio real baja según cuántos días llevas en el pool.",
+    "referencePrice": "Precio de referencia",
+    "currentSavings": "Ahorro actual/m³",
+    "daysActive": "Días activo",
+    "volume": "Volumen acumulado",
+    "participants": "participantes",
+    "joinPool": "Unirme al pool",
+    "referenceNote": "Precio máximo de referencia. El precio real varía según tu día de entrada.",
+    "origin": "Origen",
+    "destination": "Destino",
+    "departure": "Salida estimada",
+    "m3": "m³"
+  },
+  "pricing": {
+    "title": "¿Cómo se distribuye el ahorro?",
+    "subtitle": "El ahorro generado por el volumen del pool se reparte dinámicamente. Quien lleva más días en el pool recibe una mayor porción del descuento.",
+    "daysInPool": "Días en el pool",
+    "yourShare": "Tu parte",
+    "companyShare": "Nuestra comisión",
+    "yourPrice": "Tu precio",
+    "exampleTitle": "Ejemplo en vivo",
+    "exampleDesc": "Si el ahorro acumulado es",
+    "perM3": "por m³",
+    "bestDeal": "Mejor precio",
+    "tier0Label": "Días 1-2",
+    "tier3Label": "Desde día 3",
+    "tier5Label": "Desde día 5",
+    "tier10Label": "Desde día 10",
+    "tier40Label": "Desde día 40"
+  },
+  "howItWorks": {
+    "title": "¿Cómo funciona?",
+    "step1Title": "1. Únete al pool",
+    "step1Desc": "Selecciona el pool que corresponde a tu ruta y regístrate. Cuanto antes entres, mayor será tu descuento.",
+    "step2Title": "2. El precio baja",
+    "step2Desc": "A medida que más importadores se unen y el volumen crece, el precio por m³ disminuye para todos.",
+    "step3Title": "3. Pagas tu precio real",
+    "step3Desc": "Tu precio final se calcula según cuántos días llevas en el pool. El ahorro va directamente a ti, no a intermediarios."
+  },
+  "transparency": {
+    "title": "Transparencia total",
+    "desc": "Publicamos el precio de referencia máximo. El precio real de cada cliente varía según su día de entrada al pool, y siempre es menor o igual al precio de referencia. Nunca pagas más de lo que ves.",
+    "point1": "El precio de referencia es el techo, no el precio real",
+    "point2": "Cuanto antes te unes, mayor es tu ahorro",
+    "point3": "Nuestra comisión se descuenta del ahorro generado, no del precio base"
+  },
+  "footer": {
+    "tagline": "Consolidación inteligente China → Panamá",
+    "rights": "Todos los derechos reservados"
+  }
+}
