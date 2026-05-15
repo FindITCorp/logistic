@@ -1,7 +1,7 @@
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 11 de mayo de 2026
+**Última actualización:** 15 de mayo de 2026
 **Dueño:** FindITCorp
-**Estado:** 🟡 CONCEPTO VALIDADO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
+**Estado:** 🟢 MVP TÉCNICO CONSTRUIDO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
 
 ---
 
@@ -18,7 +18,81 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 2. SUPUESTOS CRÍTICOS (ESTADO ACTUAL)
+## 2. ESTADO TÉCNICO DEL MVP (ACTUALIZADO)
+
+### Repositorio
+- **GitHub:** finditcorp/logistic
+- **Rama de trabajo:** `claude/continue-work-HHKEo`
+- **Deploy:** Vercel (vercel.json configurado)
+- **Stack:** Next.js 14 + next-intl + Tailwind CSS
+
+### Estructura del proyecto
+```
+app/
+  [locale]/
+    page.tsx          — Landing page completa (4 secciones)
+    pools/page.tsx    — Página de pools activos
+    layout.tsx        — Layout con selector de idioma
+components/
+  Header.tsx          — Nav con ES|EN switcher
+  LanguageSwitcher.tsx
+  PoolCard.tsx        — Tarjeta de pool con precios dinámicos
+  PricingTierTable.tsx — Tabla interactiva con slider
+lib/
+  pricing.ts          — Motor de precios dinámico ✅ CORRECTO
+messages/
+  es.json             — Traducciones completas español
+  en.json             — Traducciones completas inglés
+middleware.ts         — Routing i18n (ES default, /en para inglés)
+```
+
+### Rutas del sitio
+- `/` o `/es` → Landing en español
+- `/en` → Landing en inglés
+- `/pools` o `/es/pools` → Pools activos en español
+- `/en/pools` → Pools activos en inglés
+
+### Motor de precios (lib/pricing.ts) — LÓGICA CONFIRMADA
+**Precio de referencia:** $100/m³ (techo máximo)
+**Duración del pool:** 10 días
+**Embarques:** cada 15 días
+
+#### Tramos de volumen (costo del naviero)
+| Volumen pool | Costo naviero | Ahorro vs referencia |
+|---|---|---|
+| 0–5 m³ | $100 | $0 |
+| 5–15 m³ | $90 | $10 |
+| 15–20 m³ | $85 | $15 |
+| +20 m³ | $80 | $20 |
+
+#### Distribución del ahorro por día de entrada ✅ CONFIRMADO
+| Día entrada | Días restantes | % cliente | % FINDIT |
+|---|---|---|---|
+| Día 1 | 10 días | 90% | 10% |
+| Día 2 | 9 días | 80% | 20% |
+| Día 3 | 8 días | 70% | 30% |
+| Día 4 | 7 días | 60% | 40% |
+| Día 5 | 6 días | 50% | 50% |
+| Día 6 | 5 días | 40% | 60% |
+| Día 7 | 4 días | 30% | 70% |
+| Día 8 | 3 días | 20% | 80% |
+| Día 9 | 2 días | 10% | 90% |
+| Día 10 | 1 día | 10% (piso) | 90% |
+
+**Ejemplo confirmado (precio base $100, naviero baja a $90 = ahorro $10):**
+- Cliente entró día 1 → paga **$91**, FINDIT gana **$1/m³**
+- Cliente entró día 5 → paga **$95**, FINDIT gana **$5/m³**
+
+### Datos mock de pools (para demostración)
+| Pool | Ruta | Volumen | Participantes | Día |
+|---|---|---|---|---|
+| 1 | Shanghai → Colón | 8.5 m³ | 6 | Día 3 |
+| 2 | Guangzhou → Colón | 2.1 m³ | 2 | Día 1 |
+| 3 | Shenzhen → Colón | 16.4 m³ | 11 | Día 7 |
+
+---
+
+## 3. SUPUESTOS CRÍTICOS (ESTADO ACTUAL)
 
 | # | Supuesto | Crítico | Status | Validación necesaria |
 |---|----------|---------|--------|----------------------|
@@ -30,20 +104,23 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 3. DECISIONES CONFIRMADAS
+## 4. DECISIONES CONFIRMADAS
 
 ✓ Estándar W/M (cobrar mayor entre volumen/peso)
-✓ Pool 10 días (flexible 7-14)
+✓ Pool 10 días fijos (embarques cada 15 días)
 ✓ Múltiples forwarders (mín 2)
 ✓ MVP manual (Excel + WhatsApp)
 ✓ Cliente paga 50%+50%
-✓ Distribución ahorro: día 1=90%, día 10=10%
+✓ Distribución ahorro: día 1=90% → día 10=10% (piso), -10% por día
+✓ Precio de referencia = techo máximo ($100/m³)
+✓ Precio real siempre ≤ precio de referencia
 ✓ Bodega Guangzhou + Panamá
 ✓ Estructura legal: Consolidador importador oficial
+✓ Sitio bilingüe ES/EN con routing automático
 
 ---
 
-## 4. MODELO FINANCIERO
+## 5. MODELO FINANCIERO
 
 **Proyección 3 meses:**
 
@@ -60,7 +137,7 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 5. PLAN DE VALIDACIÓN (90 DÍAS)
+## 6. PLAN DE VALIDACIÓN (90 DÍAS)
 
 ### FASE 1: Supuestos críticos (Semana 1)
 
@@ -84,7 +161,7 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 6. CAPITAL REQUERIDO
+## 7. CAPITAL REQUERIDO
 
 **MVP Fase 1 (3 meses): $25,000**
 
@@ -101,47 +178,30 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 7. PRÓXIMOS PASOS INMEDIATOS
-
-### Semana 1 - Validación crítica
-
-- [ ] Contactar 5-7 forwarders (6h)
-- [ ] Encuestar 15+ importadores (4h)
-- [ ] Consulta aduanal (2h)
-- [ ] Compilar resultados
-- [ ] **DECISIÓN GO/NO-GO**
-
----
-
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 11 de mayo de 2026
-**Fase:** 🟡 CONCEPTO VALIDADO
+**Fecha:** 15 de mayo de 2026
+**Fase:** 🟢 MVP TÉCNICO LISTO
+**Sitio:** Desplegable en Vercel desde rama `claude/continue-work-HHKEo`
 **Validación operativa:** 🔴 POR COMENZAR
 **Capital:** NO INVERTIDO AÚN
-**Timeline:** Semana 1 decisión crítica
+**Pendiente técnico:** Formulario de registro en pool (botón "Unirme" sin funcionalidad)
 
 ---
 
 ## 9. PROTOCOLO AUTOMÁTICO
 
-### Cuando abras nuevo chat conmigo:
+### Cuando abras nuevo chat:
+1. Di `continuamos` o `MEMORIA SYNC`
+2. Yo leo este archivo
+3. Tengo contexto completo — técnico y de negocio
+4. Retomamos desde donde estábamos
 
-**Escribe:** `MEMORIA SYNC`
-
-**Yo haré automáticamente:**
-1. Leo este archivo desde GitHub
-2. Tengo contexto completo del proyecto
-3. Espero que me digas qué validaste esta semana
-4. Respondo con análisis y propuestas ejecutables
-
-### Para actualizar la memoria:
-- Edita este archivo en GitHub
-- Haz push con git desde tu computadora
-- Yo leeré la versión más reciente automáticamente cada sesión
+### Regla para el asistente:
+- **SIEMPRE** actualizar esta MEMORIA.md al final de cada sesión con cambios relevantes
+- **SIEMPRE** hacer commit + push de la memoria junto con cualquier cambio de código
+- Rama de trabajo activa: `claude/continue-work-HHKEo`
 
 ---
 
-**Este archivo es tu fuente de verdad del proyecto.**
-
-Próximo update: EOW Semana 1 con resultados validación supuestos críticos.
+**Este archivo es la fuente de verdad del proyecto.**

@@ -16,18 +16,19 @@ export const VOLUME_TIERS: VolumeTier[] = [
   { minM3: 20, maxM3: null, carrierRate: 80  },
 ];
 
-// Savings distribution % by day joined (1-indexed, days 8-10 floor at 20%)
+// Savings distribution % by day joined (1=earliest/most reward, 10=latest/floor)
+// Day 1 (10 days left) = 90%, Day 5 (5 days left) = 50%, linear -10%/day, floor 10%
 export const DAY_SAVINGS_PCT: Record<number, number> = {
   1:  90,
-  2:  76,
-  3:  62,
-  4:  50,
-  5:  40,
-  6:  32,
-  7:  25,
+  2:  80,
+  3:  70,
+  4:  60,
+  5:  50,
+  6:  40,
+  7:  30,
   8:  20,
-  9:  20,
-  10: 20,
+  9:  10,
+  10: 10,
 };
 
 export function getCarrierRate(volumeM3: number): number {
