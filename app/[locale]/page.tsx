@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 function HeroSection() {
   const t = useTranslations('hero');
   const locale = useLocale();
+  const prefix = locale === 'es' ? '' : `/${locale}`;
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-28 text-white">
@@ -27,13 +28,13 @@ function HeroSection() {
         </p>
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <a
-            href={`/${locale}/pools`}
+            href={`${prefix}/pools`}
             className="rounded-xl bg-white px-8 py-3.5 text-base font-semibold text-brand-700 shadow-lg hover:bg-blue-50 transition-colors"
           >
             {t('cta')}
           </a>
           <a
-            href={`/${locale}#how-it-works`}
+            href={`${prefix}/#how-it-works`}
             className="rounded-xl border border-white/30 bg-white/10 px-8 py-3.5 text-base font-semibold text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
           >
             {t('ctaSecondary')}
@@ -47,6 +48,7 @@ function HeroSection() {
 function HowItWorksSection() {
   const t = useTranslations('howItWorks');
   const locale = useLocale();
+  const prefix = locale === 'es' ? '' : `/${locale}`;
   const steps = [
     { key: 'step1', icon: '🚀' },
     { key: 'step2', icon: '📉' },
@@ -74,7 +76,7 @@ function HowItWorksSection() {
         </div>
         <div className="mt-12 text-center">
           <a
-            href={`/${locale}/pools`}
+            href={`${prefix}/pools`}
             className="inline-block rounded-xl bg-brand-700 px-8 py-3.5 text-base font-semibold text-white hover:bg-brand-600 transition-colors"
           >
             {t('cta')}

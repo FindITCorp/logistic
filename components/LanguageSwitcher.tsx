@@ -9,9 +9,10 @@ export default function LanguageSwitcher() {
   const pathname = usePathname();
 
   function switchLocale(next: string) {
-    const segments = pathname.split('/');
-    segments[1] = next;
-    router.push(segments.join('/'));
+    // Remove existing locale prefix if present
+    const withoutLocale = pathname.replace(/^\/(es|en)/, '') || '/';
+    const newPath = next === 'es' ? withoutLocale : `/${next}${withoutLocale}`;
+    router.push(newPath);
   }
 
   return (
