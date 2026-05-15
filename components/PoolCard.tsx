@@ -28,6 +28,9 @@ export default function PoolCard({ pool }: PoolCardProps) {
   const dayProgressPct = Math.round((pool.currentDay / POOL_DURATION_DAYS) * 100);
   const daysLeft = POOL_DURATION_DAYS - pool.currentDay + 1;
 
+  // Volume tier thresholds as % of 20m³ max
+  const tierMarks = [5, 15, 20].map((m) => Math.min(100, Math.round((m / 20) * 100)));
+
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md overflow-hidden">
       {/* Header */}
@@ -67,7 +70,7 @@ export default function PoolCard({ pool }: PoolCardProps) {
                 <span className="text-sm font-normal text-slate-500">/m³</span>
               </p>
               <p className="text-xs text-emerald-600 font-medium">
-                -{formatCurrency(todayResult.clientDiscount)} ({todayResult.savingsPct}% {t('ofSavings')})
+                -{formatCurrency(todayResult.clientDiscount)} {t('discount')}
               </p>
             </div>
           ) : (
@@ -82,22 +85,33 @@ export default function PoolCard({ pool }: PoolCardProps) {
           )}
         </div>
 
-        {/* Volume progress */}
+        {/* Volume progress with tier markers */}
         <div>
           <div className="flex justify-between text-xs text-slate-500 mb-1">
             <span>{t('volume')}: <strong>{pool.volumeM3} m³</strong> · {pool.participants} {t('participants')}</span>
-            <span className="text-slate-400">{progressPct}% {t('ofMaxVolume')}</span>
+            <span className="text-emerald-600 font-medium">{t('moreVolumeMoreDiscount')}</span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div className="relative h-3 rounded-full bg-slate-100 overflow-visible">
+            {/* Fill bar */}
             <div
-              className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-500 transition-all"
+              className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-500 transition-all"
               style={{ width: `${progressPct}%` }}
             />
+            {/* Tier change markers */}
+            {tierMarks.map((pct, i) => (
+              <div
+                key={i}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center"
+                style={{ left: `${pct}%` }}
+              >
+                <div className="w-0.5 h-4 bg-slate-400 rounded-full" />
+              </div>
+            ))}
           </div>
-          <div className="flex justify-between text-xs text-slate-400 mt-1">
+          <div className="relative flex justify-between text-xs text-slate-400 mt-1">
             <span>0</span>
-            <span>5m³</span>
-            <span>15m³</span>
+            <span className="absolute text-emerald-600 font-semibold" style={{ left: '25%', transform: 'translateX(-50%)' }}>5m³↓</span>
+            <span className="absolute text-emerald-600 font-semibold" style={{ left: '75%', transform: 'translateX(-50%)' }}>15m³↓</span>
             <span>20m³+</span>
           </div>
         </div>

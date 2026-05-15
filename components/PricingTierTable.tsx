@@ -3,7 +3,6 @@
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
-  DAY_SAVINGS_PCT,
   POOL_DURATION_DAYS,
   VOLUME_TIERS,
   calculateClientPrice,
@@ -16,6 +15,10 @@ export default function PricingTierTable() {
   const [volumeM3, setVolumeM3] = useState(8);
 
   const days = Array.from({ length: POOL_DURATION_DAYS }, (_, i) => i + 1);
+  const maxVol = 25;
+
+  // Tier change points for slider markers
+  const tierBreaks = VOLUME_TIERS.filter((tier) => tier.minM3 > 0).map((tier) => tier.minM3);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
@@ -29,23 +32,25 @@ export default function PricingTierTable() {
         <p className="text-sm font-medium text-slate-700 mb-3">{t('volumeTiersTitle')}</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {VOLUME_TIERS.map((tier) => {
-            const savings = REFERENCE_PRICE - tier.carrierRate;
+            const discount = REFERENCE_PRICE - tier.carrierRate;
             const active = volumeM3 >= tier.minM3 && (tier.maxM3 === null || volumeM3 < tier.maxM3);
             return (
               <div
                 key={tier.minM3}
                 className={`rounded-xl border p-3 text-center transition-colors ${
                   active
-                    ? 'border-brand-500 bg-brand-50'
+                    ? 'border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300'
                     : 'border-slate-100 bg-slate-50'
                 }`}
               >
                 <p className="text-xs text-slate-500">
-                  {tier.maxM3 ? `${tier.minM3}–${tier.maxM3} m³` : `>${tier.minM3} m³`}
+                  {tier.maxM3 ? `${tier.minM3}–${tier.maxM3} m³` : `+${tier.minM3} m³`}
                 </p>
-                <p className="text-lg font-bold text-slate-900">${tier.carrierRate}</p>
-                <p className={`text-xs font-semibold ${savings > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                  {savings > 0 ? `-$${savings} ${t('savings')}` : t('noSavings')}
+                <p className={`text-xl font-extrabold mt-1 ${active ? 'text-emerald-700' : 'text-slate-900'}`}>
+                  {formatCurrency(REFERENCE_PRICE - discount)}/m³
+                </p>
+                <p className={`text-xs font-semibold mt-0.5 ${discount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {discount > 0 ? `${t('youSave')} $${discount}` : t('noSavings')}
                 </p>
               </div>
             );
@@ -53,32 +58,59 @@ export default function PricingTierTable() {
         </div>
       </div>
 
-      {/* Volume slider */}
-      <div className="flex items-center gap-4">
-        <label className="text-sm font-medium text-slate-700 whitespace-nowrap">
-          {t('simulateVolume')}:
-        </label>
-        <input
-          type="range"
-          min={0}
-          max={25}
-          step={0.5}
-          value={volumeM3}
-          onChange={(e) => setVolumeM3(Number(e.target.value))}
-          className="flex-1 accent-brand-600"
-        />
-        <span className="w-16 text-right font-mono text-sm font-semibold text-slate-900">
-          {volumeM3} m³
-        </span>
+      {/* Volume slider with tier markers */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-slate-700">{t('simulateVolume')}</label>
+          <span className="font-mono text-sm font-bold text-slate-900">{volumeM3} m³</span>
+        </div>
+        <div className="relative pt-1 pb-5">
+          <input
+            type="range"
+            min={0}
+            max={maxVol}
+            step={0.5}
+            value={volumeM3}
+            onChange={(e) => setVolumeM3(Number(e.target.value))}
+            className="w-full accent-emerald-600"
+          />
+          {/* Tier break markers */}
+          <div className="relative w-full h-0">
+            {tierBreaks.map((vol) => {
+              const pct = (vol / maxVol) * 100;
+              const tier = VOLUME_TIERS.find((t) => t.minM3 === vol);
+              const discount = tier ? REFERENCE_PRICE - tier.carrierRate : 0;
+              return (
+                <div
+                  key={vol}
+                  className="absolute flex flex-col items-center"
+                  style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}
+                >
+                  <div className="w-px h-2 bg-emerald-500" />
+                  <span className="text-xs text-emerald-700 font-semibold whitespace-nowrap">
+                    {vol}m³ → ${REFERENCE_PRICE - discount}/m³
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Incentive message */}
+        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-2.5 flex items-center gap-3">
+          <span className="text-emerald-600 text-lg">📦</span>
+          <p className="text-xs text-emerald-800 font-medium">
+            {t('inviteMessage')}
+          </p>
+        </div>
       </div>
 
-      {/* Day pricing table */}
+      {/* Day pricing table — no % column */}
       <div className="overflow-hidden rounded-xl border border-slate-100">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3">{t('dayJoined')}</th>
-              <th className="px-4 py-3 text-center">{t('yourShare')}</th>
               <th className="px-4 py-3 text-center">{t('yourDiscount')}</th>
               <th className="px-4 py-3 text-right">{t('yourPrice')}</th>
             </tr>
@@ -86,9 +118,8 @@ export default function PricingTierTable() {
           <tbody className="divide-y divide-slate-50">
             {days.map((day) => {
               const result = calculateClientPrice(day, volumeM3);
-              const pct = DAY_SAVINGS_PCT[day];
-              const isFloor = day >= 8;
               const isBest = day === 1;
+              const isFloor = day >= 9;
 
               return (
                 <tr
@@ -104,17 +135,13 @@ export default function PricingTierTable() {
                         {t('bestDeal')}
                       </span>
                     )}
-                    {isFloor && !isBest && (
-                      <span className="ml-2 text-xs text-slate-400">{t('floor')}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-center font-mono">
+                    {result.clientDiscount > 0 ? (
+                      <span className="text-emerald-600 font-semibold">-{formatCurrency(result.clientDiscount)}</span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
                     )}
-                  </td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`font-semibold ${isBest ? 'text-emerald-600' : 'text-slate-700'}`}>
-                      {pct}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-center font-mono text-slate-600">
-                    {result.clientDiscount > 0 ? `-${formatCurrency(result.clientDiscount)}` : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold text-slate-900">
                     {formatCurrency(result.clientPrice)}/m³
