@@ -70,5 +70,16 @@
   "footer": {
     "tagline": "Consolidación inteligente China → Panamá",
     "rights": "Todos los derechos reservados"
+  },
+  "concept": {
+    "title": "¿Qué es un pool de carga?",
+    "subtitle": "Es simple: más importadores compartiendo un contenedor = precio más bajo para todos.",
+    "exampleTitle": "Ejemplo real — Precio por m³ según volumen del pool",
+    "alone": "Envías solo",
+    "smallPool": "Pool pequeño",
+    "fullPool": "Pool completo",
+    "perM3": "por metro cúbico",
+    "save": "Ahorras",
+    "exampleNote": "Tu ahorro exacto depende del día en que te uniste al pool. Quien entra antes, recibe mayor porción del descuento."
   }
 }

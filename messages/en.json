@@ -70,5 +70,16 @@
   "footer": {
     "tagline": "Smart consolidation China → Panama",
     "rights": "All rights reserved"
+  },
+  "concept": {
+    "title": "What is a cargo pool?",
+    "subtitle": "Simple: more importers sharing a container = lower price for everyone.",
+    "exampleTitle": "Real example — Price per m³ by pool volume",
+    "alone": "Shipping alone",
+    "smallPool": "Small pool",
+    "fullPool": "Full pool",
+    "perM3": "per cubic meter",
+    "save": "You save",
+    "exampleNote": "Your exact savings depend on the day you joined the pool. Earlier entry = bigger share of the discount."
   }
 }

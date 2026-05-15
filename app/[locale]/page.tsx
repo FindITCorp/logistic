@@ -7,7 +7,7 @@ function HeroSection() {
   const prefix = locale === 'es' ? '' : `/${locale}`;
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-28 text-white">
+    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-24 text-white">
       <div className="absolute inset-0 opacity-10">
         <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-white" />
         <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-white" />
@@ -45,27 +45,84 @@ function HeroSection() {
   );
 }
 
+function ConceptSection() {
+  const t = useTranslations('concept');
+
+  return (
+    <section className="py-16 bg-white">
+      <div className="container max-w-4xl">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-slate-900">{t('title')}</h2>
+          <p className="mt-3 text-slate-500 max-w-xl mx-auto">{t('subtitle')}</p>
+        </div>
+
+        {/* Visual example */}
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+          <p className="text-center text-sm font-semibold uppercase tracking-wide text-slate-500 mb-6">
+            {t('exampleTitle')}
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Solo */}
+            <div className="rounded-xl bg-white border border-slate-200 p-5 text-center">
+              <div className="text-3xl mb-2">👤</div>
+              <p className="font-semibold text-slate-700">{t('alone')}</p>
+              <p className="text-xs text-slate-400 mt-1">1–5 m³</p>
+              <p className="text-3xl font-extrabold text-slate-900 mt-3">$100</p>
+              <p className="text-xs text-slate-500">{t('perM3')}</p>
+            </div>
+
+            {/* Pool medio */}
+            <div className="rounded-xl bg-blue-50 border border-brand-200 p-5 text-center">
+              <div className="text-3xl mb-2">👥</div>
+              <p className="font-semibold text-brand-700">{t('smallPool')}</p>
+              <p className="text-xs text-slate-400 mt-1">5–15 m³</p>
+              <p className="text-3xl font-extrabold text-brand-700 mt-3">$91–95</p>
+              <p className="text-xs text-slate-500">{t('perM3')}</p>
+              <p className="text-xs text-emerald-600 font-semibold mt-1">{t('save')} $5–9</p>
+            </div>
+
+            {/* Pool grande */}
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-5 text-center">
+              <div className="text-3xl mb-2">🚢</div>
+              <p className="font-semibold text-emerald-700">{t('fullPool')}</p>
+              <p className="text-xs text-slate-400 mt-1">+20 m³</p>
+              <p className="text-3xl font-extrabold text-emerald-700 mt-3">$82–98</p>
+              <p className="text-xs text-slate-500">{t('perM3')}</p>
+              <p className="text-xs text-emerald-600 font-semibold mt-1">{t('save')} $2–18</p>
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-slate-400 mt-4">
+            * {t('exampleNote')}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HowItWorksSection() {
   const t = useTranslations('howItWorks');
   const locale = useLocale();
   const prefix = locale === 'es' ? '' : `/${locale}`;
   const steps = [
-    { key: 'step1', icon: '🚀' },
-    { key: 'step2', icon: '📉' },
-    { key: 'step3', icon: '💰' },
+    { key: 'step1', icon: '🚀', color: 'bg-blue-50 text-blue-600' },
+    { key: 'step2', icon: '📉', color: 'bg-emerald-50 text-emerald-600' },
+    { key: 'step3', icon: '💰', color: 'bg-amber-50 text-amber-600' },
   ] as const;
 
   return (
     <section id="how-it-works" className="bg-slate-50 py-20">
       <div className="container">
         <h2 className="text-center text-3xl font-bold text-slate-900">{t('title')}</h2>
-        <div className="mt-12 grid gap-8 sm:grid-cols-3">
-          {steps.map(({ key, icon }) => (
-            <div key={key} className="rounded-2xl bg-white p-6 shadow-sm text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-2xl">
+        <div className="mt-12 grid gap-6 sm:grid-cols-3">
+          {steps.map(({ key, icon, color }) => (
+            <div key={key} className="rounded-2xl bg-white p-6 shadow-sm">
+              <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${color}`}>
                 {icon}
               </div>
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="mt-4 text-lg font-semibold text-slate-900">
                 {t(`${key}Title` as any)}
               </h3>
               <p className="mt-2 text-sm text-slate-500 leading-relaxed">
@@ -133,6 +190,7 @@ export default function HomePage() {
       <Header />
       <main>
         <HeroSection />
+        <ConceptSection />
         <HowItWorksSection />
         <TransparencySection />
       </main>
