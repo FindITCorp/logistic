@@ -1,0 +1,74 @@
+{
+  "nav": {
+    "howItWorks": "How it works",
+    "pools": "Active pools",
+    "login": "Log in",
+    "signup": "Sign up"
+  },
+  "hero": {
+    "badge": "LCL Consolidation China → Panama",
+    "title": "Cut your import costs by up to",
+    "titleHighlight": "90%",
+    "subtitle": "Join a cargo pool and share freight costs with other importers. The more volume accumulates, the lower the price per m³ for everyone.",
+    "cta": "View active pools",
+    "ctaSecondary": "How it works"
+  },
+  "pool": {
+    "title": "Active Pools",
+    "subtitle": "The reference price is the maximum you will pay. Your actual price drops based on the day you join and accumulated volume.",
+    "referencePrice": "Reference price",
+    "yourPriceToday": "Your price if you join today",
+    "ofSavings": "of savings",
+    "noSavingsYet": "No savings yet (low volume)",
+    "daysActive": "Days active",
+    "daysLeft": "days left",
+    "dayOf": "Day {current}/{total}",
+    "volume": "Volume",
+    "participants": "participants",
+    "poolProgress": "Pool progress",
+    "ofMaxVolume": "of max",
+    "joinPool": "Join pool",
+    "referenceNote": "Maximum reference price. Your actual price will always be equal to or lower.",
+    "origin": "Origin",
+    "destination": "Destination",
+    "departure": "Estimated departure",
+    "m3": "m³"
+  },
+  "pricing": {
+    "title": "How is your price calculated?",
+    "subtitle": "Your price depends on two variables: accumulated pool volume (lowers carrier cost) and the day you join (determines your share of the savings).",
+    "volumeTiersTitle": "Pool volume tiers",
+    "savings": "savings",
+    "noSavings": "No savings",
+    "simulateVolume": "Simulate volume",
+    "dayJoined": "Entry day",
+    "yourShare": "Your share",
+    "yourDiscount": "Your discount",
+    "yourPrice": "Your price",
+    "bestDeal": "Best deal",
+    "floor": "floor",
+    "day": "Day",
+    "referenceNote2": "Reference price {price}/m³. Actual price never exceeds the reference."
+  },
+  "howItWorks": {
+    "title": "How does it work?",
+    "step1Title": "1. Join the pool",
+    "step1Desc": "Select the pool for your route and sign up. The earlier you join, the bigger your share of the savings generated.",
+    "step2Title": "2. Price drops with volume",
+    "step2Desc": "As more importers join and volume crosses thresholds, the carrier cost drops and distributable savings increase for everyone.",
+    "step3Title": "3. Each client sees their price",
+    "step3Desc": "Your price updates in real time based on current pool volume and the day you joined. You never pay more than the reference price.",
+    "cta": "View active pools"
+  },
+  "transparency": {
+    "title": "Full transparency",
+    "desc": "The reference price is the absolute ceiling any client will pay. Each client's actual price is calculated individually based on their entry day and accumulated pool volume.",
+    "point1": "The reference price is the ceiling, not the actual price",
+    "point2": "The earlier you join and the more volume there is, the bigger your savings",
+    "point3": "Our commission is deducted from savings generated, not from the base price"
+  },
+  "footer": {
+    "tagline": "Smart consolidation China → Panama",
+    "rights": "All rights reserved"
+  }
+}
