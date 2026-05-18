@@ -14,35 +14,39 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Vercel CLI
-        run: npm install -g vercel
+        run: npm install -g vercel@latest
 
       - name: Link and deploy to Vercel
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          echo "CLI version:"
           vercel --version
-          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || true
-          cat .vercel/project.json 2>/dev/null || echo "no project.json"
-          DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
-          echo "$DEPLOY_OUT"
-          PROD_URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
-          INSPECT_URL=$(echo "$DEPLOY_OUT" | grep -oE "https://vercel\.com/[a-zA-Z0-9._/-]+" | tail -1)
-          echo "prod_url=$PROD_URL inspect_url=$INSPECT_URL"
+          echo "--- Link ---"
+          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || echo "link returned non-zero"
+          echo "--- project.json ---"
+          cat .vercel/project.json 2>/dev/null || echo "(none)"
+          echo "--- Deploy ---"
+          vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | tee /tmp/deploy_out.txt
+          echo "--- All URLs found ---"
+          grep -oE "https://[a-zA-Z0-9._/-]+" /tmp/deploy_out.txt || echo "(no URLs)"
+          echo "--- project.json after deploy ---"
+          cat .vercel/project.json 2>/dev/null || echo "(none)"
+          echo "--- Get URL via API ---"
           PROJECT_ID=$(python3 -c "import json; print(json.load(open('.vercel/project.json'))['projectId'])" 2>/dev/null || echo "")
-          if [ -z "$PROD_URL" ] && [ -n "$PROJECT_ID" ]; then
-            API=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID")
-            echo "Project API: $API"
-            PROD_URL=$(echo "$API" | python3 -c "import json,sys; d=json.load(sys.stdin); aliases=d.get('alias',[]); r=[a for a in aliases if isinstance(a,str) and 'vercel.app' in a]; print('https://'+r[0] if r else '')" 2>/dev/null || echo "")
+          echo "project_id: $PROJECT_ID"
+          URL=""
+          if [ -n "$PROJECT_ID" ]; then
+            RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID")
+            echo "Project: $RESP"
+            URL=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); alias=d.get('targets',{}).get('production',{}).get('alias',[]); r=[a for a in alias if isinstance(a,str) and 'vercel.app' in a]; print('https://'+r[0] if r else '')" 2>/dev/null || echo "")
           fi
-          if [ -z "$PROD_URL" ] && [ -n "$PROJECT_ID" ]; then
-            DEPS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=5&target=production")
-            echo "Deployments API: $DEPS"
-            PROD_URL=$(echo "$DEPS" | python3 -c "import json,sys; deps=json.load(sys.stdin).get('deployments',[]); r=[d for d in deps if d.get('state')=='READY' and d.get('url')]; print('https://'+r[0]['url'] if r else '')" 2>/dev/null || echo "")
+          if [ -z "$URL" ]; then
+            URL=$(grep -oE "https://[a-zA-Z0-9._-]+" /tmp/deploy_out.txt | grep "vercel\.app" | tail -1 || echo "")
           fi
-          FINAL_URL="${PROD_URL:-$INSPECT_URL}"
-          echo "=== FINAL URL: $FINAL_URL ==="
-          echo "url=$FINAL_URL" >> $GITHUB_OUTPUT
+          echo "=== FINAL URL: $URL ==="
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Post URL as commit comment
         if: always()
