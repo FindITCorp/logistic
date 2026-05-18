@@ -11,25 +11,36 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Vercel CLI
-        run: npm install -g vercel
+        run: npm install -g vercel && vercel --version
 
       - name: Deploy to Vercel
         id: deploy
         run: |
-          # Deploy and strip ANSI escape codes from output
-          DEPLOY_OUT=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | sed 's/\x1B\[[0-9;]*[mK]//g')
-          echo "$DEPLOY_OUT"
+          # Deploy and capture output — strip ANSI codes via python
+          DEPLOY_OUT=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
 
-          # Try multiple URL patterns (Vercel CLI format changed across versions)
-          URL=$(echo "$DEPLOY_OUT" | grep -oP "https://[^\s']+" | grep "vercel\.app" | tail -1)
-          if [ -z "$URL" ]; then
-            URL=$(echo "$DEPLOY_OUT" | grep -oP "https://[^\s']+" | tail -1)
-          fi
+          # Strip ANSI, find URLs
+          URL=$(echo "$DEPLOY_OUT" | python3 -c "
+          import sys, re
+          text = sys.stdin.read()
+          # Strip ANSI escape codes
+          clean = re.sub(r'\x1B\[[0-9;]*[A-Za-z]', '', text)
+          # Find all https URLs
+          urls = re.findall(r'https://\S+', clean)
+          # Prefer production/vercel.app URLs
+          prod = [u.rstrip('.,)') for u in urls if 'vercel.app' in u]
+          fallback = [u.rstrip('.,)') for u in urls if 'vercel.com' not in u]
+          result = prod[-1] if prod else (fallback[-1] if fallback else '')
+          print(result)
+          " 2>/dev/null || echo "")
+
+          echo "=== RAW OUTPUT ==="
+          echo "$DEPLOY_OUT" | cat
+          echo "=== EXTRACTED URL: $URL ==="
 
           echo "url=$URL" >> $GITHUB_OUTPUT
           echo "## Deployed to Vercel" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
-          echo "Production URL: $URL"
 
       - name: Post URL as commit comment
         env:
@@ -41,8 +52,8 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"body\":\"Deployed to Vercel\n\nURL: $URL\"}"
-            echo "Comment posted with URL: $URL"
+              -d "{\"body\":\"Deployed to Vercel\\n\\nURL: $URL\"}"
+            echo "Comment posted: $URL"
           else
-            echo "No URL captured from deploy output"
+            echo "URL empty — check raw output above in Deploy step logs"
           fi
