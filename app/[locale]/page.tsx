@@ -1,5 +1,6 @@
 import { useTranslations, useLocale } from 'next-intl';
 import Header from '@/components/Header';
+import LeadCaptureSection from '@/components/LeadCaptureSection';
 
 function HeroSection() {
   const t = useTranslations('hero');
@@ -192,6 +193,7 @@ export default function HomePage() {
         <HeroSection />
         <ConceptSection />
         <HowItWorksSection />
+        <LeadCaptureSection />
         <TransparencySection />
       </main>
       <Footer />
