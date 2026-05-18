@@ -1,5 +1,5 @@
 import { createServerClient } from './supabase/client'
-import { getCarrierRate, calculateClientPrice, VOLUME_TIERS } from './pricing'
+import { getCarrierRate, calculateClientPrice, DEFAULT_VOLUME_TIERS } from './pricing'
 import type { Pool, OriginCity } from './supabase/database.types'
 
 export interface AssignmentResult {
@@ -41,7 +41,7 @@ export async function findBestPool(
     const crossesTier = rateAfter < rateBefore
 
     // How close is the pool to the next tier threshold?
-    const nextTier = VOLUME_TIERS.find((t) => t.minM3 > pool.current_volume_m3)
+    const nextTier = DEFAULT_VOLUME_TIERS.find((t) => t.minM3 > pool.current_volume_m3)
     const gapToNextTier = nextTier ? nextTier.minM3 - pool.current_volume_m3 : Infinity
 
     const { clientPrice } = calculateClientPrice(pool.day_number, volumeAfter)
