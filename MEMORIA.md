@@ -186,19 +186,16 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 **Validación operativa:** 🔴 POR COMENZAR
 **Capital:** NO INVERTIDO AÚN
 
-### Últimos cambios deployados (esta sesión):
-- ✅ Tabla de precios corregida: día 1=90%, día 5=50%, lineal -10%/día, piso=10%
-- ✅ Eliminado el % de ahorro visible al cliente (era info interna)
-- ✅ PoolCard: marcas en barra de volumen en 5m³ y 15m³ donde cambia el precio
-- ✅ Mensaje de incentivo: "más volumen = mayor descuento" para que traigan más clientes
-- ✅ Columna "Tu parte (%)" eliminada de la tabla — solo Día / Descuento / Precio
-- ✅ GitHub Actions configurado para deploy automático a Vercel en push a main
-- ✅ CLAUDE.md creado para instrucciones automáticas de sesión
-- ✅ SessionStart hook creado en `.claude/hooks/session-start.sh`
+### Últimos cambios deployados:
+- ✅ Modal "Unirme al pool" implementado (JoinPoolModal.tsx) — formulario con nombre, WhatsApp/email, volumen, validación, confirmación
+- ✅ PoolCard convertido a client component para manejar modal
+- ✅ Traducciones del modal en ES/EN
+- ✅ Stop hook reescrito — regenera CLAUDE.md con instrucción explícita de NO usar tool de memoria
+- ✅ CLAUDE.md simplificado y reforzado para sesiones nuevas
 
 ### Pendiente técnico:
-- Formulario de registro en pool (botón "Unirme" sin funcionalidad)
-- URL de Vercel — verificar en vercel.com/dashboard
+- Conectar formulario "Unirme" a backend real (actualmente muestra confirmación mock — candidato: enviar a Google Sheets o WhatsApp API)
+- URL pública de Vercel — verificar en vercel.com/dashboard
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
