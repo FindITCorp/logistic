@@ -21,32 +21,35 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          echo "CLI version:"
-          vercel --version
+          echo "CLI: $(vercel --version)"
           echo "--- Link ---"
-          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || echo "link returned non-zero"
+          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || true
           echo "--- project.json ---"
           cat .vercel/project.json 2>/dev/null || echo "(none)"
           echo "--- Deploy ---"
-          vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | tee /tmp/deploy_out.txt
-          echo "--- All URLs found ---"
-          grep -oE "https://[a-zA-Z0-9._/-]+" /tmp/deploy_out.txt || echo "(no URLs)"
-          echo "--- project.json after deploy ---"
-          cat .vercel/project.json 2>/dev/null || echo "(none)"
-          echo "--- Get URL via API ---"
-          PROJECT_ID=$(python3 -c "import json; print(json.load(open('.vercel/project.json'))['projectId'])" 2>/dev/null || echo "")
-          echo "project_id: $PROJECT_ID"
-          URL=""
-          if [ -n "$PROJECT_ID" ]; then
-            RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID")
-            echo "Project: $RESP"
-            URL=$(echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); alias=d.get('targets',{}).get('production',{}).get('alias',[]); r=[a for a in alias if isinstance(a,str) and 'vercel.app' in a]; print('https://'+r[0] if r else '')" 2>/dev/null || echo "")
-          fi
-          if [ -z "$URL" ]; then
-            URL=$(grep -oE "https://[a-zA-Z0-9._-]+" /tmp/deploy_out.txt | grep "vercel\.app" | tail -1 || echo "")
-          fi
-          echo "=== FINAL URL: $URL ==="
+          vercel deploy --prod --yes --token=$VERCEL_TOKEN > /tmp/deploy_stdout.txt 2>/tmp/deploy_stderr.txt
+          DEPLOY_EXIT=$?
+          echo "exit code: $DEPLOY_EXIT"
+          echo "=== STDOUT ===" && cat /tmp/deploy_stdout.txt
+          echo "=== STDERR ===" && cat /tmp/deploy_stderr.txt
+          cat /tmp/deploy_stdout.txt /tmp/deploy_stderr.txt > /tmp/deploy_all.txt
+          grep -oE "https://[a-zA-Z0-9._-]+" /tmp/deploy_all.txt || echo "(no https URLs)"
+          URL=$(grep -oE "https://[a-zA-Z0-9._-]+" /tmp/deploy_all.txt | grep "vercel\.app" | tail -1 || echo "")
+          echo "=== URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Deploy stdout:" > /tmp/debug_output.txt
+          cat /tmp/deploy_stdout.txt >> /tmp/debug_output.txt
+          echo "Deploy stderr:" >> /tmp/debug_output.txt
+          cat /tmp/deploy_stderr.txt >> /tmp/debug_output.txt
+
+      - name: Commit debug output
+        run: |
+          cp /tmp/debug_output.txt deploy_debug.txt
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add deploy_debug.txt
+          git diff --staged --quiet || git commit -m "debug: vercel deploy output [skip ci]"
+          git push origin main || true
 
       - name: Post URL as commit comment
         if: always()
@@ -57,7 +60,7 @@ jobs:
           if [ -n "$URL" ]; then
             MSG="Deployed!\n\n$URL"
           else
-            MSG="Deploy ran — check Actions logs"
+            MSG="Deploy ran — check Actions logs or deploy_debug.txt"
           fi
           curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
