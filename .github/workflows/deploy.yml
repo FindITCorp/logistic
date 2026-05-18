@@ -16,74 +16,86 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Deploy to Vercel
-        id: deploy
-        run: |
-          # Capture full output
-          vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 \
-            | sed 's/\x1b\[[0-9;]*m//g' \
-            | tee /tmp/vercel_out.txt || true
-
-          echo "=== FULL OUTPUT ==="
-          cat /tmp/vercel_out.txt
-
-          # Extract inspect URL to get deployment ID
-          INSPECT=$(grep -oE "https://vercel\.com/[^ ]+" /tmp/vercel_out.txt | head -1 | tr -d '[:space:]')
-          echo "Inspect URL: $INSPECT"
-          echo "inspect_url=$INSPECT" >> $GITHUB_OUTPUT
-
-      - name: Get production URL from Vercel API
-        id: get_url
+      - name: Link Vercel project
+        id: link
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          INSPECT="${{ steps.deploy.outputs.inspect_url }}"
-          echo "Inspect: $INSPECT"
+          # Get project info from Vercel API
+          PROJ_DATA=$(curl -sf "https://api.vercel.com/v9/projects?limit=20" \
+            -H "Authorization: Bearer $VERCEL_TOKEN")
 
-          # Get all projects and find the most recent production deployment
-          PROD_URL=$(curl -sf "https://api.vercel.com/v6/deployments?limit=5&target=production" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" | python3 -c "
-          import sys, json
-          try:
-            deps = json.load(sys.stdin).get('deployments', [])
-            print(f'Found {len(deps)} deployments', file=sys.stderr)
-            for d in deps:
-              print(f'  {d.get(\"name\",\"?\")} — {d.get(\"url\",\"?\")} — {d.get(\"state\",\"?\")}', file=sys.stderr)
-            for d in deps:
-              u = d.get('url','')
-              if u:
-                print('https://' + u if not u.startswith('http') else u)
-                break
-          except Exception as e:
-            print(f'Error: {e}', file=sys.stderr)
-          " 2>/tmp/api_debug.txt || echo "")
-
-          cat /tmp/api_debug.txt
-
-          # Also list all projects for reference
-          echo "=== ALL PROJECTS ==="
-          curl -sf "https://api.vercel.com/v9/projects?limit=20" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" | python3 -c "
+          echo "=== AVAILABLE PROJECTS ==="
+          echo "$PROJ_DATA" | python3 -c "
           import sys, json
           for p in json.load(sys.stdin).get('projects', []):
-            print(f\"  {p['name']}: {[a.get('domain') for a in p.get('alias',[])]}\")
-          " 2>/dev/null || echo "Failed"
+            print(f\"  {p['name']} (id={p['id']}, org={p.get('accountId','?')})\")
+          " 2>/dev/null || echo "Failed to parse"
 
-          echo "prod_url=$PROD_URL" >> $GITHUB_OUTPUT
-          echo "Production URL: $PROD_URL"
+          PROJECT_ID=$(echo "$PROJ_DATA" | python3 -c "
+          import sys, json
+          projects = json.load(sys.stdin).get('projects', [])
+          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
+          p = match or (projects[0] if projects else None)
+          print(p['id'] if p else '')
+          " 2>/dev/null || echo "")
 
-      - name: Post real URL as commit comment
+          ORG_ID=$(echo "$PROJ_DATA" | python3 -c "
+          import sys, json
+          projects = json.load(sys.stdin).get('projects', [])
+          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
+          p = match or (projects[0] if projects else None)
+          print(p.get('accountId','') if p else '')
+          " 2>/dev/null || echo "")
+
+          PROJ_NAME=$(echo "$PROJ_DATA" | python3 -c "
+          import sys, json
+          projects = json.load(sys.stdin).get('projects', [])
+          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
+          p = match or (projects[0] if projects else None)
+          print(p.get('name','') if p else '')
+          " 2>/dev/null || echo "")
+
+          echo "Project: $PROJ_NAME | ID: $PROJECT_ID | Org: $ORG_ID"
+
+          if [ -n "$PROJECT_ID" ] && [ -n "$ORG_ID" ]; then
+            mkdir -p .vercel
+            echo "{\"projectId\":\"$PROJECT_ID\",\"orgId\":\"$ORG_ID\"}" > .vercel/project.json
+            echo "Created .vercel/project.json"
+            cat .vercel/project.json
+          else
+            echo "Could not get project/org IDs — will deploy without linking"
+          fi
+
+          echo "project_name=$PROJ_NAME" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Vercel
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+          echo "=== DEPLOY OUTPUT ==="
+          echo "$DEPLOY_OUT"
+
+          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
+          echo "=== URL: $URL ==="
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Post URL as commit comment
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          URL="${{ steps.get_url.outputs.prod_url }}"
-          INSPECT="${{ steps.deploy.outputs.inspect_url }}"
+          URL="${{ steps.deploy.outputs.url }}"
+          PROJ="${{ steps.link.outputs.project_name }}"
 
           if [ -n "$URL" ]; then
-            MSG="Deployed to Vercel\n\nProduction: $URL\nInspect: $INSPECT"
+            MSG="Deployed to Vercel\n\nProduction: $URL"
+          elif [ -n "$PROJ" ]; then
+            MSG="Deployed to Vercel project: $PROJ\n\nURL not captured — check vercel.com/dashboard"
           else
-            MSG="Deploy ran. Inspect: $INSPECT\n\nCheck Actions logs for project URL."
+            MSG="Deploy workflow ran — check Actions logs for details"
           fi
 
           curl -sf -X POST \
