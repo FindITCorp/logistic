@@ -6,18 +6,95 @@
 
   Set up "~/work/logistic/logistic"
 Searching for existing projects…
-Loading teams…
-Error: The token provided via `--token` argument is not valid. Please provide a valid token.
-link exit: 1
+  Linked      finditcorps-projects/logistic
 === project.json ===
-cat: .vercel/project.json: No such file or directory
-(none)
-=== vercel deploy ===
+{"projectId":"prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5","orgId":"team_BrCUd1PJnqaQTOuhJFrDYsw3","projectName":"logistic"}=== vercel deploy ===
+Retrieving project…
+Deploying finditcorps-projects/logistic
+Uploading [--------------------] (0.0B/464.4KB)
+Uploading [=====---------------] (118.1KB/464.4KB)
+Uploading [==========----------] (242.9KB/464.4KB)
+Uploading [===============-----] (363.3KB/464.4KB)
+Uploading [====================] (464.4KB/464.4KB)
+  Inspect     https://vercel.com/finditcorps-projects/logistic/9FCBz7crN3EyjznQTXXM2zj57RQq
+▲ Production  https://logistic-3hoorv4jb-finditcorps-projects.vercel.app
+https://logistic-3hoorv4jb-finditcorps-projects.vercel.appBuilding…
+Building…
+Running build in Washington, D.C., USA (East) – iad1
+Build machine configuration: 2 cores, 8 GB
+Retrieving list of deployment files...
+Downloading 66 deployment files...
+Restored build cache from previous deployment (CMGaTa1tnenerKr5v6jhFfWdGdjA)
+Running "vercel build"
+Vercel CLI 53.3.2
+Warning: Detected "engines": { "node": ">=18.17.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+Running "install" command: `npm install`...
+added 50 packages, removed 2 packages, changed 3 packages, and audited 477 packages in 13s
+169 packages are looking for funding
+run `npm fund` for details
+7 vulnerabilities (1 moderate, 5 high, 1 critical)
+To address all issues (including breaking changes), run:
+npm audit fix --force
+Run `npm audit` for details.
+Detected Next.js version: 14.2.15
+Running "npm run build"
+> findit-logistic@0.1.0 build
+> next build
+▲ Next.js 14.2.15
+Creating an optimized production build ...
+✓ Compiled successfully
+Linting and checking validity of types ...
+Collecting page data ...
+Generating static pages (0/11) ...
+Generating static pages (2/11)
+Generating static pages (5/11)
+Generating static pages (8/11)
+✓ Generating static pages (11/11)
+Finalizing page optimization ...
+Collecting build traces ...
+Route (app)                              Size     First Load JS
+┌ ○ /_not-found                          873 B          88.1 kB
+├ ƒ /[locale]                            2.81 kB         112 kB
+├ ƒ /[locale]/admin                      14.5 kB         102 kB
+├ ƒ /[locale]/admin/leads                3.44 kB        90.7 kB
+├ ƒ /[locale]/admin/proveedores          4.68 kB        91.9 kB
+├ ƒ /[locale]/mis-pedidos                6.35 kB        93.6 kB
+├ ƒ /[locale]/pools                      3.32 kB         113 kB
+├ ƒ /[locale]/pools/[pool_number]        4.1 kB          113 kB
+├ ƒ /[locale]/pools/unirme               2.98 kB        90.2 kB
+├ ƒ /[locale]/registro                   63.8 kB         151 kB
+├ ƒ /[locale]/seguimiento                3.06 kB        90.3 kB
+├ ƒ /api/clients                         0 B                0 B
+├ ƒ /api/health                          0 B                0 B
+├ ƒ /api/leads                           0 B                0 B
+├ ƒ /api/orders                          0 B                0 B
+├ ƒ /api/orders/[id]/join-pool           0 B                0 B
+├ ƒ /api/pools                           0 B                0 B
+├ ƒ /api/pools/[pool_number]             0 B                0 B
+├ ƒ /api/providers                       0 B                0 B
+├ ƒ /api/providers/[id]/rates            0 B                0 B
+├ ƒ /api/seguimiento                     0 B                0 B
+├ ƒ /api/shipments                       0 B                0 B
+└ ƒ /api/shipments/[id]/assign           0 B                0 B
++ First Load JS shared by all            87.2 kB
+├ chunks/117-7e6d74955a1e774e.js       31.6 kB
+├ chunks/fd9d1056-de3de7d93a3d098f.js  53.6 kB
+└ other shared chunks (total)          1.98 kB
+ƒ Middleware                             37.9 kB
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+Traced Next.js server files in: 70.804ms
+Created all serverless functions in: 70.22ms
+Collected static files (public/, static/, .next/static): 4.447ms
+Build Completed in /vercel/output [1m]
+Deploying outputs...
+Deployment completed
+Creating build cache...
+[2K[1A[2K[G▲ Production  https://logistic-3hoorv4jb-finditcorps-projects.vercel.app
+Completing…
+▲ Aliased     https://logistic-six-alpha.vercel.app
 
-  Set up "~/work/logistic/logistic"
-Loading teams…
-Error: The token provided via `--token` argument is not valid. Please provide a valid token.
-deploy exit: 1
+✓ Ready in 2m
 === all urls ===
 grep: /tmp/debug.txt: input file is also the output
 (none)
