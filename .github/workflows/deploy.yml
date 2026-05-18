@@ -27,22 +27,52 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          URL=$(curl -sf "https://api.vercel.com/v9/projects" \
+          # Get all projects, print full info for debugging, find logistic URL
+          URL=$(curl -sf "https://api.vercel.com/v9/projects?limit=20" \
             -H "Authorization: Bearer $VERCEL_TOKEN" | \
             python3 -c "
           import sys, json
           try:
-            projects = json.load(sys.stdin).get('projects', [])
+            data = json.load(sys.stdin)
+            projects = data.get('projects', [])
+            print('Projects found:', len(projects), file=sys.stderr)
             for p in projects:
-              if 'logistic' in p.get('name','').lower():
-                aliases = p.get('alias', [])
-                if aliases:
-                  domain = aliases[0].get('domain','')
-                  if domain:
-                    print('https://' + domain)
-                    break
+              name = p.get('name','')
+              print(f'  Project: {name}', file=sys.stderr)
+              # Try alias first
+              for alias in p.get('alias', []):
+                domain = alias.get('domain','')
+                if domain and 'vercel.app' in domain:
+                  print(f'  Alias: {domain}', file=sys.stderr)
+                  print('https://' + domain)
+                  sys.exit(0)
+              # Try latestDeployments
+              for dep in p.get('latestDeployments', []):
+                url = dep.get('url','')
+                if url:
+                  print(f'  LatestDeploy: {url}', file=sys.stderr)
+                  if not url.startswith('http'):
+                    url = 'https://' + url
+                  print(url)
+                  sys.exit(0)
+          except Exception as e:
+            print(f'Error: {e}', file=sys.stderr)
+          " 2>&1 | grep -v "^Projects\|^  Project\|^  Alias\|^  Latest\|^Error" | head -1 || echo "")
+
+          # Fallback: try latest deployment URL via deployments API
+          if [ -z "$URL" ]; then
+            URL=$(curl -sf "https://api.vercel.com/v6/deployments?limit=1&target=production" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" | \
+              python3 -c "
+          import sys, json
+          try:
+            deps = json.load(sys.stdin).get('deployments', [])
+            if deps:
+              u = deps[0].get('url','')
+              if u: print('https://' + u if not u.startswith('http') else u)
           except: pass
           " 2>/dev/null || echo "")
+          fi
 
           # Fallback to deploy step URL
           if [ -z "$URL" ]; then
