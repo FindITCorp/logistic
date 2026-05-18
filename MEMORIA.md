@@ -180,12 +180,29 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 15 de mayo de 2026
-**Fase:** 🟢 MVP TÉCNICO LISTO
-**Sitio:** Desplegable en Vercel desde rama `claude/continue-work-HHKEo`
+**Fecha:** 18 de mayo de 2026
+**Fase:** 🟢 MVP TÉCNICO LISTO Y DEPLOYADO
+**Sitio:** Live en Vercel — deploy automático desde `main` vía GitHub Actions
 **Validación operativa:** 🔴 POR COMENZAR
 **Capital:** NO INVERTIDO AÚN
-**Pendiente técnico:** Formulario de registro en pool (botón "Unirme" sin funcionalidad)
+
+### Últimos cambios deployados (esta sesión):
+- ✅ Tabla de precios corregida: día 1=90%, día 5=50%, lineal -10%/día, piso=10%
+- ✅ Eliminado el % de ahorro visible al cliente (era info interna)
+- ✅ PoolCard: marcas en barra de volumen en 5m³ y 15m³ donde cambia el precio
+- ✅ Mensaje de incentivo: "más volumen = mayor descuento" para que traigan más clientes
+- ✅ Columna "Tu parte (%)" eliminada de la tabla — solo Día / Descuento / Precio
+- ✅ GitHub Actions configurado para deploy automático a Vercel en push a main
+- ✅ CLAUDE.md creado para instrucciones automáticas de sesión
+- ✅ SessionStart hook creado en `.claude/hooks/session-start.sh`
+
+### Pendiente técnico:
+- Formulario de registro en pool (botón "Unirme" sin funcionalidad)
+- URL de Vercel — verificar en vercel.com/dashboard
+
+### Para retomar en sesión nueva:
+Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
+Los tokens están guardados en `/root/.claude/.tokens` (solo en el contenedor local).
 
 ---
 
