@@ -30,23 +30,39 @@ jobs:
         run: |
           cat .vercel/project.json 2>/dev/null && echo "project.json OK" || echo "WARNING: no .vercel/project.json"
           PROJECT_ID=$(python3 -c "import json; d=json.load(open('.vercel/project.json')); print(d.get('projectId',''))" 2>/dev/null || echo "")
-          ORG_ID=$(python3 -c "import json; d=json.load(open('.vercel/project.json')); print(d.get('orgId',''))" 2>/dev/null || echo "")
-          echo "Deploying project: $PROJECT_ID org: $ORG_ID"
-          DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-          echo "=== RAW DEPLOY OUTPUT ==="
+          echo "Deploying project_id=$PROJECT_ID"
+          DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
+          echo "=== DEPLOY OUTPUT ==="
           echo "$DEPLOY_OUT"
-          echo "=========================="
-          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._/-]+" | grep "vercel\.app" | tail -1)
+          echo "===================="
+          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | grep -v "vercel\.app/docs" | tail -1)
+          echo "URL from CLI: '$URL'"
           if [ -z "$URL" ] && [ -n "$PROJECT_ID" ]; then
-            echo "URL not in CLI output, querying Vercel API..."
-            TEAM_PARAM=""
-            if [ -n "$ORG_ID" ] && [ "$ORG_ID" != "$PROJECT_ID" ]; then
-              TEAM_PARAM="&teamId=$ORG_ID"
-            fi
-            URL=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=1&target=production${TEAM_PARAM}" \
-              | python3 -c "import json,sys; d=json.load(sys.stdin); deps=d.get('deployments',[]); print(deps[0]['url'] if deps else '')" 2>/dev/null || echo "")
-            if [ -n "$URL" ]; then URL="https://$URL"; fi
+            echo "Querying Vercel API for production URL..."
+            API_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=3&target=production")
+            echo "API response: $API_RESP"
+            URL=$(echo "$API_RESP" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for dep in d.get('deployments',[]):
+    if dep.get('state') in ('READY','BUILDING'):
+        u = dep.get('url','')
+        if u: print('https://' + u); break
+" 2>/dev/null || echo "")
+          fi
+          if [ -z "$URL" ] && [ -n "$PROJECT_ID" ]; then
+            echo "Trying project aliases..."
+            ALIAS_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/projects/$PROJECT_ID/aliases?limit=1")
+            echo "Alias response: $ALIAS_RESP"
+            URL=$(echo "$ALIAS_RESP" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for a in d.get('aliases',[]):
+    u = a.get('alias','')
+    if 'vercel.app' in u: print('https://' + u); break
+" 2>/dev/null || echo "")
           fi
           echo "=== FINAL URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
