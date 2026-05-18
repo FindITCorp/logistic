@@ -21,53 +21,57 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          # Get project info from Vercel API
-          PROJ_DATA=$(curl -s "https://api.vercel.com/v9/projects?limit=20" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" || echo "{}")
+          # Search personal + all teams for the logistic project
+          python3 << 'PYEOF'
+          import subprocess, json, os
 
-          echo "=== AVAILABLE PROJECTS ==="
-          echo "$PROJ_DATA" | python3 -c "
-          import sys, json
-          for p in json.load(sys.stdin).get('projects', []):
-            print(f\"  {p['name']} (id={p['id']}, org={p.get('accountId','?')})\")
-          " 2>/dev/null || echo "Failed to parse"
+          token = os.environ['VERCEL_TOKEN']
+          headers = ["-H", f"Authorization: Bearer {token}"]
 
-          PROJECT_ID=$(echo "$PROJ_DATA" | python3 -c "
-          import sys, json
-          projects = json.load(sys.stdin).get('projects', [])
-          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
-          p = match or (projects[0] if projects else None)
-          print(p['id'] if p else '')
-          " 2>/dev/null || echo "")
+          def api(path):
+              r = subprocess.run(["curl","-s",f"https://api.vercel.com{path}"] + headers,
+                                  capture_output=True, text=True)
+              try: return json.loads(r.stdout)
+              except: return {}
 
-          ORG_ID=$(echo "$PROJ_DATA" | python3 -c "
-          import sys, json
-          projects = json.load(sys.stdin).get('projects', [])
-          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
-          p = match or (projects[0] if projects else None)
-          print(p.get('accountId','') if p else '')
-          " 2>/dev/null || echo "")
+          # Get user/personal account
+          user = api("/v2/user").get("user", {})
+          uid  = user.get("id", "")
+          print(f"User: {user.get('username','?')} id={uid}")
 
-          PROJ_NAME=$(echo "$PROJ_DATA" | python3 -c "
-          import sys, json
-          projects = json.load(sys.stdin).get('projects', [])
-          match = next((p for p in projects if 'logistic' in p.get('name','').lower()), None)
-          p = match or (projects[0] if projects else None)
-          print(p.get('name','') if p else '')
-          " 2>/dev/null || echo "")
+          # Collect scopes: personal + all teams
+          scopes = [("personal", uid, None)]
+          for t in api("/v2/teams").get("teams", []):
+              scopes.append((t["name"], t["id"], t["id"]))
 
-          echo "Project: $PROJ_NAME | ID: $PROJECT_ID | Org: $ORG_ID"
+          # Search for logistic project across all scopes
+          found = None
+          for scope_name, scope_id, team_id in scopes:
+              url = "/v9/projects?limit=20" + (f"&teamId={team_id}" if team_id else "")
+              data = api(url)
+              projects = data.get("projects", [])
+              print(f"  Scope {scope_name}: {len(projects)} projects — {[p['name'] for p in projects]}")
+              for p in projects:
+                  if "logistic" in p["name"].lower() or not found:
+                      found = (p, scope_id)
+                      if "logistic" in p["name"].lower():
+                          break
 
-          if [ -n "$PROJECT_ID" ] && [ -n "$ORG_ID" ]; then
-            mkdir -p .vercel
-            echo "{\"projectId\":\"$PROJECT_ID\",\"orgId\":\"$ORG_ID\"}" > .vercel/project.json
-            echo "Created .vercel/project.json"
-            cat .vercel/project.json
-          else
-            echo "Could not get project/org IDs — will deploy without linking"
-          fi
-
-          echo "project_name=$PROJ_NAME" >> $GITHUB_OUTPUT
+          if found:
+              p, org_id = found
+              proj_id = p["id"]
+              proj_name = p["name"]
+              print(f"Using: {proj_name} (id={proj_id}, org={org_id})")
+              os.makedirs(".vercel", exist_ok=True)
+              with open(".vercel/project.json","w") as f:
+                  json.dump({"projectId": proj_id, "orgId": org_id}, f)
+              # Write outputs
+              with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+                  f.write(f"project_name={proj_name}\n")
+                  f.write(f"org_id={org_id}\n")
+          else:
+              print("No project found!")
+          PYEOF
 
       - name: Deploy to Vercel
         id: deploy
