@@ -15,51 +15,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run SQL migration via Management API
+      - name: Run all migrations via Management API
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" \
-            -X POST "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/database/query" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"query\": $(cat supabase/migrations/001_initial_schema.sql | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')}")
-          echo "$RESPONSE"
-          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP:" | cut -d: -f2)
-          [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] && echo "Migration OK" || exit 1
+          for f in supabase/migrations/*.sql; do
+            echo "Running: $f"
+            RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" \
+              -X POST "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/database/query" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\": $(python3 -c "import sys,json; print(json.dumps(open('$f').read()))")}")
+            HTTP=$(echo "$RESPONSE" | grep "HTTP:" | cut -d: -f2)
+            BODY=$(echo "$RESPONSE" | grep -v "HTTP:")
+            echo "Status: $HTTP | $BODY"
+          done
 
   set-vercel-env:
     name: Set Vercel Environment Variables
     runs-on: ubuntu-latest
     steps:
-      - name: Set env vars and redeploy
+      - name: Set env vars
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Get project ID
-          PROJECT_JSON=$(curl -s "https://api.vercel.com/v9/projects" \
-            -H "Authorization: Bearer $VERCEL_TOKEN")
-          PROJECT_ID=$(echo "$PROJECT_JSON" | python3 -c "
+          PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | python3 -c "
           import sys,json
           projects = json.load(sys.stdin).get('projects', [])
           match = next((p for p in projects if 'logistic' in p['name'].lower()), None)
           print((match or projects[0])['id'] if projects else '')
           ")
-          echo "Vercel Project ID: $PROJECT_ID"
+          echo "Vercel Project: $PROJECT_ID"
 
           set_env() {
-            RESULT=$(curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+            curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"key\":\"$1\",\"value\":\"$2\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}")
-            echo "$1: $(echo $RESULT | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('key', d.get('error',{}).get('message','ok')))")"
+              -d "{\"key\":\"$1\",\"value\":\"$2\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print('$1 →', d.get('key', d.get('error',{}).get('message','ok')))"
           }
 
           set_env "NEXT_PUBLIC_SUPABASE_URL"     "$SUPABASE_URL"
           set_env "NEXT_PUBLIC_SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
           set_env "SUPABASE_SERVICE_ROLE_KEY"     "$SUPABASE_SERVICE_KEY"
-          echo "All env vars set"
