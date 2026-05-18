@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Package, CheckCircle, Copy, Check } from 'lucide-react'
+import { Package, CheckCircle, Copy, Check, Download } from 'lucide-react'
 import type { Client } from '@/lib/supabase/database.types'
 import { WAREHOUSE_CHINA } from '@/lib/clients'
 
 interface RegistrationSuccess {
   client: Client
   shippingAddress: string
+  qrDataUrl: string
 }
 
 export default function RegistroPage() {
@@ -46,7 +47,11 @@ export default function RegistroPage() {
         `Tel: ${WAREHOUSE_CHINA.phone}`,
       ].join('\n')
 
-      setSuccess({ client, shippingAddress })
+      // Generate QR on client side
+      const { default: QRCode } = await import('qrcode')
+      const qrDataUrl = await QRCode.toDataURL(client.client_code, { width: 300, margin: 2 })
+
+      setSuccess({ client, shippingAddress, qrDataUrl })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al registrarse')
     } finally {
@@ -74,10 +79,24 @@ export default function RegistroPage() {
               </div>
             </div>
 
-            <div className="bg-gray-800 rounded-xl p-4 mb-6">
-              <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">Tu código de cliente</p>
-              <p className="text-3xl font-mono font-bold text-emerald-400">{success.client.client_code}</p>
-              <p className="text-gray-500 text-sm mt-1">Guarda este código — lo necesitas para todos tus envíos</p>
+            <div className="bg-gray-800 rounded-xl p-4 mb-6 flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-gray-400 text-xs uppercase tracking-widest mb-1">Tu código de cliente</p>
+                <p className="text-3xl font-mono font-bold text-emerald-400">{success.client.client_code}</p>
+                <p className="text-gray-500 text-sm mt-1">Colócalo en todos tus pedidos de proveedores</p>
+              </div>
+              {success.qrDataUrl && (
+                <div className="flex flex-col items-center gap-2">
+                  <img src={success.qrDataUrl} alt="QR" className="w-20 h-20 rounded-lg bg-white p-1" />
+                  <a
+                    href={success.qrDataUrl}
+                    download={`${success.client.client_code}-QR.png`}
+                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    <Download className="w-3 h-3" /> Descargar
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="mb-6">

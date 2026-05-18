@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ScanLine, CheckCircle, AlertCircle, Package } from 'lucide-react'
+import { ScanLine, CheckCircle, AlertCircle, Package, MessageCircle } from 'lucide-react'
+import { buildWhatsAppLink, buildAssignmentMessage, buildArrivalMessage } from '@/lib/notifications'
 
 interface ShipmentResult {
   assigned: boolean
-  client: { name: string; client_code: string; assignment_mode: string }
+  client: { name: string; client_code: string; assignment_mode: string; whatsapp: string | null }
   pool?: { origin_city: string; day_number: number; current_volume_m3: number }
   price_per_m3?: number
   reason?: string
@@ -180,9 +181,39 @@ export default function AdminPage() {
 
               {!result.assigned && result.select_url && (
                 <div className="mt-3 p-3 bg-gray-800 rounded-lg">
-                  <p className="text-yellow-400 text-xs font-medium mb-1">Link enviado al cliente para que elija su pool:</p>
-                  <p className="font-mono text-white text-xs break-all">{`${process.env.NEXT_PUBLIC_SITE_URL || 'https://tu-sitio.vercel.app'}${result.select_url}`}</p>
+                  <p className="text-yellow-400 text-xs font-medium mb-1">Link para que el cliente elija su pool:</p>
+                  <p className="font-mono text-white text-xs break-all">{`${process.env.NEXT_PUBLIC_SITE_URL || ''}${result.select_url}`}</p>
                 </div>
+              )}
+
+              {result.client.whatsapp && (
+                <a
+                  href={buildWhatsAppLink(
+                    result.client.whatsapp,
+                    result.assigned && result.pool && result.price_per_m3
+                      ? buildAssignmentMessage({
+                          clientName: result.client.name,
+                          clientCode: result.client.client_code,
+                          originCity: result.pool.origin_city,
+                          poolDay: result.pool.day_number,
+                          pricePerM3: result.price_per_m3,
+                          volumeM3: result.shipment.volume_m3,
+                        })
+                      : buildArrivalMessage({
+                          clientName: result.client.name,
+                          clientCode: result.client.client_code,
+                          originCity: result.pool?.origin_city ?? 'guangzhou',
+                          volumeM3: result.shipment.volume_m3,
+                          selectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || ''}${result.select_url ?? ''}`,
+                        })
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2.5 rounded-xl text-sm transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Notificar por WhatsApp
+                </a>
               )}
             </div>
           </div>

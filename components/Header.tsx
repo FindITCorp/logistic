@@ -24,6 +24,9 @@ export default function Header() {
           <a href={`${prefix}/pools`} className="hover:text-slate-900 transition-colors">
             {t('pools')}
           </a>
+          <a href={`${prefix}/seguimiento`} className="hover:text-slate-900 transition-colors">
+            {t('tracking')}
+          </a>
         </nav>
 
         <div className="flex items-center gap-3">
