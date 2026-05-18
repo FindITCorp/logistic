@@ -16,78 +16,82 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel
 
-      - name: Link Vercel project
+      - name: Discover Vercel project and link
         id: link
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          # Search personal + all teams for the logistic project
-          python3 - <<'PYEOF'
+          cat > /tmp/find_project.py << 'EOF'
 import subprocess, json, os, sys
 
 token = os.environ['VERCEL_TOKEN']
-step_summary = os.environ.get('GITHUB_STEP_SUMMARY','')
+output_file = os.environ.get('GITHUB_OUTPUT','')
 
 def api(path):
     r = subprocess.run(
-        ["curl","-s",f"https://api.vercel.com{path}",
-         "-H", f"Authorization: Bearer {token}"],
+        ["curl","-s","-H",f"Authorization: Bearer {token}",
+         f"https://api.vercel.com{path}"],
         capture_output=True, text=True, timeout=15)
-    raw = r.stdout.strip()
-    print(f"API {path}: {raw[:200]}", file=sys.stderr)
-    try: return json.loads(raw)
-    except: return {"_raw": raw[:200]}
+    try:
+        return json.loads(r.stdout)
+    except:
+        print(f"WARN: Could not parse response for {path}: {r.stdout[:200]}")
+        return {}
 
-def summary(line):
-    print(line)
-    if step_summary:
-        with open(step_summary,"a") as f: f.write(line+"\n")
+def write_output(key, val):
+    print(f"{key}={val}")
+    if output_file:
+        with open(output_file,"a") as f:
+            f.write(f"{key}={val}\n")
 
-# Get user
+# Get user info
 user_data = api("/v2/user")
 user = user_data.get("user", {})
 uid = user.get("id","")
-summary(f"### Vercel Account")
-summary(f"User: {user.get('username','?')} | id={uid}")
-if not uid:
-    summary(f"WARNING: Could not get user. Raw: {user_data.get('_raw','')[:200]}")
+print(f"User: {user.get('username','NONE')} id={uid}")
 
-# Collect scopes: personal + teams
-scopes = [("personal", uid, None)]
+# Get teams
 teams_data = api("/v2/teams")
-for t in teams_data.get("teams", []):
-    scopes.append((t.get("name","?"), t["id"], t["id"]))
+teams = teams_data.get("teams", [])
+print(f"Teams: {[t.get('name') for t in teams]}")
 
-summary(f"\n### Projects by scope")
-found = None
-for scope_name, scope_id, team_id in scopes:
+# Search all scopes
+scopes = [(None, uid)]
+for t in teams:
+    scopes.append((t["id"], t["id"]))
+
+found_p = found_org = found_name = None
+for team_id, org_id in scopes:
     url = "/v9/projects?limit=20" + (f"&teamId={team_id}" if team_id else "")
     data = api(url)
     projects = data.get("projects", [])
     names = [p["name"] for p in projects]
-    summary(f"Scope **{scope_name}** ({len(projects)} projects): {names}")
+    print(f"  teamId={team_id}: {names}")
     for p in projects:
-        if "logistic" in p["name"].lower() or not found:
-            found = (p, scope_id or uid)
-            if "logistic" in p["name"].lower():
-                break
+        if "logistic" in p["name"].lower():
+            found_p = p["id"]
+            found_org = org_id
+            found_name = p["name"]
+            break
+    if found_p:
+        break
+    # fallback to first project
+    if projects and not found_p:
+        found_p = projects[0]["id"]
+        found_org = org_id
+        found_name = projects[0]["name"]
 
-if found:
-    p, org_id = found
-    proj_id = p["id"]
-    proj_name = p["name"]
-    summary(f"\n**Selected:** {proj_name} | id={proj_id} | org={org_id}")
+if found_p:
+    print(f"Using project: {found_name} id={found_p} org={found_org}")
     os.makedirs(".vercel", exist_ok=True)
     with open(".vercel/project.json","w") as f:
-        json.dump({"projectId": proj_id, "orgId": org_id}, f)
-    with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-        f.write(f"project_name={proj_name}\n")
-        f.write(f"project_id={proj_id}\n")
-        f.write(f"org_id={org_id}\n")
-    summary("Created .vercel/project.json ✓")
+        json.dump({"projectId": found_p, "orgId": found_org}, f)
+    write_output("project_name", found_name)
+    write_output("project_id", found_p)
 else:
-    summary("**ERROR: No project found!**")
-PYEOF
+    print("ERROR: No Vercel project found!")
+EOF
+          python3 /tmp/find_project.py
 
       - name: Deploy to Vercel
         id: deploy
@@ -95,9 +99,7 @@ PYEOF
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-          echo "=== DEPLOY OUTPUT ==="
           echo "$DEPLOY_OUT"
-
           URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
           echo "=== URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
@@ -109,17 +111,15 @@ PYEOF
         run: |
           URL="${{ steps.deploy.outputs.url }}"
           PROJ="${{ steps.link.outputs.project_name }}"
-
           if [ -n "$URL" ]; then
-            MSG="Deployed to Vercel\n\nProduction: $URL"
+            MSG="Deployed!\n\n$URL"
           elif [ -n "$PROJ" ]; then
-            MSG="Deployed to Vercel project: $PROJ\n\nURL not captured — check vercel.com/dashboard"
+            MSG="Deployed project: $PROJ\nURL not captured — see vercel.com/dashboard"
           else
-            MSG="Deploy workflow ran — check Actions logs for details"
+            MSG="Deploy ran — check Actions logs"
           fi
-
-          curl -sf -X POST \
+          curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"body\":\"$MSG\"}" && echo "Comment posted" || echo "Comment failed"
+            -d "{\"body\":\"$MSG\"}" && echo "ok" || echo "failed"
