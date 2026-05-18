@@ -21,10 +21,25 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           sudo apt-get install -y postgresql-client -q
-          psql "postgresql://postgres.fvefwnojcqbdkcmfngnu:${PGPASSWORD}@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \
-            -f supabase/migrations/001_initial_schema.sql \
-            --set ON_ERROR_STOP=off
-          echo "Migration complete"
+
+          # Try direct connection first
+          DIRECT="postgresql://postgres:${PGPASSWORD}@db.fvefwnojcqbdkcmfngnu.supabase.co:5432/postgres"
+          # Try pooler regions as fallback
+          POOLER_E1="postgresql://postgres.fvefwnojcqbdkcmfngnu:${PGPASSWORD}@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
+          POOLER_W2="postgresql://postgres.fvefwnojcqbdkcmfngnu:${PGPASSWORD}@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+          POOLER_E2="postgresql://postgres.fvefwnojcqbdkcmfngnu:${PGPASSWORD}@aws-0-eu-west-2.pooler.supabase.com:5432/postgres"
+
+          for CONN in "$DIRECT" "$POOLER_E1" "$POOLER_W2" "$POOLER_E2"; do
+            echo "Trying: $(echo $CONN | sed 's/:.*@/:***@/')"
+            if psql "$CONN" -c "SELECT 1" -c "\q" 2>&1; then
+              echo "Connected! Running migration..."
+              psql "$CONN" -f supabase/migrations/001_initial_schema.sql --set ON_ERROR_STOP=off
+              echo "Migration complete"
+              exit 0
+            fi
+          done
+          echo "All connections failed"
+          exit 1
 
   set-vercel-env:
     name: Set Vercel Environment Variables
