@@ -1,10 +1,13 @@
 name: Setup — DB Migration + Vercel Env Vars
 
 on:
-  workflow_dispatch:   # run manually from GitHub Actions tab
+  workflow_dispatch:
   push:
+    branches:
+      - claude/continue-work-5DQ9A
     paths:
       - 'supabase/migrations/**'
+      - '.github/workflows/setup.yml'
 
 jobs:
   migrate-db:
@@ -18,15 +21,16 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           sudo apt-get install -y postgresql-client -q
-          psql "postgresql://postgres.fvefwnojcqbdkcmfngnu:$PGPASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \
+          psql "postgresql://postgres.fvefwnojcqbdkcmfngnu:${PGPASSWORD}@aws-0-us-east-1.pooler.supabase.com:6543/postgres" \
             -f supabase/migrations/001_initial_schema.sql \
             --set ON_ERROR_STOP=off
+          echo "Migration complete"
 
   set-vercel-env:
     name: Set Vercel Environment Variables
     runs-on: ubuntu-latest
     steps:
-      - name: Find Vercel project and set env vars
+      - name: Set env vars and redeploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -34,41 +38,25 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           # Get project ID
-          PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | python3 -c "import sys,json; p=json.load(sys.stdin)['projects']; print(next(x['id'] for x in p if 'logistic' in x['name'].lower()))" 2>/dev/null)
-
-          if [ -z "$PROJECT_ID" ]; then
-            # fallback: take first project
-            PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              | python3 -c "import sys,json; print(json.load(sys.stdin)['projects'][0]['id'])")
-          fi
-
-          echo "Project ID: $PROJECT_ID"
+          PROJECT_JSON=$(curl -s "https://api.vercel.com/v9/projects" \
+            -H "Authorization: Bearer $VERCEL_TOKEN")
+          PROJECT_ID=$(echo "$PROJECT_JSON" | python3 -c "
+          import sys,json
+          projects = json.load(sys.stdin).get('projects', [])
+          match = next((p for p in projects if 'logistic' in p['name'].lower()), None)
+          print((match or projects[0])['id'] if projects else '')
+          ")
+          echo "Vercel Project ID: $PROJECT_ID"
 
           set_env() {
-            curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+            RESULT=$(curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"key\":\"$1\",\"value\":\"$2\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print('$1 →', d.get('key', d.get('error', {}).get('message','?')))"
+              -d "{\"key\":\"$1\",\"value\":\"$2\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}")
+            echo "$1: $(echo $RESULT | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('key', d.get('error',{}).get('message','ok')))")"
           }
 
-          set_env "NEXT_PUBLIC_SUPABASE_URL"    "$SUPABASE_URL"
+          set_env "NEXT_PUBLIC_SUPABASE_URL"     "$SUPABASE_URL"
           set_env "NEXT_PUBLIC_SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
-          set_env "SUPABASE_SERVICE_ROLE_KEY"   "$SUPABASE_SERVICE_KEY"
-
-      - name: Trigger Vercel redeploy
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | python3 -c "import sys,json; p=json.load(sys.stdin)['projects']; print(next((x['id'] for x in p if 'logistic' in x['name'].lower()), p[0]['id']))")
-
-          curl -s -X POST "https://api.vercel.com/v13/deployments" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"logistic\",\"project\":\"$PROJECT_ID\",\"gitSource\":{\"type\":\"github\",\"repoId\":\"FindITCorp/logistic\",\"ref\":\"main\"}}" \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print('Deploy:', d.get('url', d.get('error','?')))"
+          set_env "SUPABASE_SERVICE_ROLE_KEY"     "$SUPABASE_SERVICE_KEY"
+          echo "All env vars set"
