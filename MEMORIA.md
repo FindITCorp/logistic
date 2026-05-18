@@ -197,10 +197,18 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 3. Tengo contexto completo — técnico y de negocio
 4. Retomamos desde donde estábamos
 
+### Credenciales de acceso
+- Tokens guardados localmente en `/root/.claude/.tokens` (nunca en GitHub)
+- Al iniciar sesión, cargar con: `source /root/.claude/.tokens`
+- Configurar remote: `git remote set-url origin https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git`
+- Si el archivo no existe, pedirle al usuario los tokens (GitHub PAT + Vercel token)
+
 ### Regla para el asistente:
+- Al leer `continuamos`: ejecutar el comando de remote de arriba inmediatamente
 - **SIEMPRE** actualizar esta MEMORIA.md al final de cada sesión con cambios relevantes
-- **SIEMPRE** hacer commit + push de la memoria junto con cualquier cambio de código
-- Rama de trabajo activa: `claude/continue-work-HHKEo`
+- **SIEMPRE** hacer commit + push junto con cualquier cambio de código
+- Push siempre a `main` para triggear deploy automático en Vercel
+- Rama de trabajo activa: `main`
 
 ---
 
