@@ -16,6 +16,40 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ pools })
 }
 
+const createSchema = z.object({
+  origin_city: z.enum(['shanghai', 'guangzhou', 'shenzhen']),
+  provider_id: z.string().uuid().optional(),
+  reference_price_m3: z.number().positive().optional(),
+  departure_date: z.string().optional(),
+})
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const input = createSchema.parse(body)
+    const db = createServerClient()
+    const { data, error } = await db
+      .from('pools')
+      .insert({
+        origin_city: input.origin_city,
+        destination_city: 'colon',
+        status: 'active',
+        provider_id: input.provider_id ?? null,
+        reference_price_m3: input.reference_price_m3 ?? 100,
+        departure_date: input.departure_date ?? null,
+        current_volume_m3: 0,
+        participants: 0,
+        day_number: 1,
+      })
+      .select()
+      .single()
+    if (error) throw new Error(error.message)
+    return NextResponse.json({ pool: data }, { status: 201 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Error' }, { status: 400 })
+  }
+}
+
 const updateSchema = z.object({
   pool_id: z.string().uuid(),
   status: z.enum(['active', 'closed', 'shipped']),
