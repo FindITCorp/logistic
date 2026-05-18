@@ -29,7 +29,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           <LanguageSwitcher />
           <a
-            href={`${prefix}/pools`}
+            href={`${prefix}/registro`}
             className="hidden rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors sm:block"
           >
             {t('signup')}
