@@ -18,6 +18,7 @@ jobs:
 
       - name: Discover and link Vercel project
         id: link
+        continue-on-error: true
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: python3 scripts/find_vercel_project.py
@@ -27,6 +28,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          cat .vercel/project.json 2>/dev/null && echo "project.json OK" || echo "WARNING: no .vercel/project.json"
           DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
           echo "$DEPLOY_OUT"
           URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
