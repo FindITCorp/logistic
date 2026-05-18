@@ -67,6 +67,23 @@
     "point2": "The earlier you join and the more volume there is, the bigger your savings",
     "point3": "Our commission is deducted from savings generated, not from the base price"
   },
+  "join": {
+    "title": "Join the pool",
+    "priceToday": "Your estimated price today",
+    "name": "Full name",
+    "namePlaceholder": "e.g. John Smith",
+    "contact": "WhatsApp or email",
+    "contactPlaceholder": "e.g. +507 6000-0000 or you@email.com",
+    "volume": "Estimated volume",
+    "volumePlaceholder": "e.g. 0.5",
+    "submit": "Send request",
+    "successTitle": "Request sent!",
+    "successDesc": "We'll contact you within 24 hours to confirm your spot in the pool.",
+    "close": "Close",
+    "required": "Required field",
+    "volumeError": "Enter a valid volume greater than 0",
+    "disclaimer": "We'll contact you via WhatsApp or email to coordinate the details."
+  },
   "footer": {
     "tagline": "Smart consolidation China → Panama",
     "rights": "All rights reserved"

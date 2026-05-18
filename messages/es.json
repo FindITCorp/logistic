@@ -67,6 +67,23 @@
     "point2": "Cuanto antes te unes y más volumen hay, mayor es tu ahorro",
     "point3": "Nuestra comisión se descuenta del ahorro generado, no del precio base"
   },
+  "join": {
+    "title": "Unirme al pool",
+    "priceToday": "Tu precio estimado hoy",
+    "name": "Nombre completo",
+    "namePlaceholder": "ej: Juan Pérez",
+    "contact": "WhatsApp o email",
+    "contactPlaceholder": "ej: +507 6000-0000 o tu@email.com",
+    "volume": "Volumen estimado",
+    "volumePlaceholder": "ej: 0.5",
+    "submit": "Enviar solicitud",
+    "successTitle": "¡Solicitud enviada!",
+    "successDesc": "Te contactaremos en menos de 24 horas para confirmar tu lugar en el pool.",
+    "close": "Cerrar",
+    "required": "Campo requerido",
+    "volumeError": "Ingresa un volumen válido mayor a 0",
+    "disclaimer": "Te contactaremos por WhatsApp o email para coordinar los detalles."
+  },
   "footer": {
     "tagline": "Consolidación inteligente China → Panamá",
     "rights": "Todos los derechos reservados"
