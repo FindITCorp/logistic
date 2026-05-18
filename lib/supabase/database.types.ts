@@ -17,6 +17,7 @@ export interface Client {
 
 export interface Pool {
   id: string
+  pool_number: number        // human-readable: Pool #001
   origin_city: OriginCity
   destination: string
   current_volume_m3: number

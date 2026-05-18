@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const { data: orders } = await db
     .from('orders')
-    .select('*, pool:pools(origin_city, destination, day_number, current_volume_m3, carrier_rate)')
+    .select('*, pool:pools(pool_number, origin_city, destination, day_number, current_volume_m3, carrier_rate)')
     .eq('client_code', code.toUpperCase())
     .order('created_at', { ascending: false })
 

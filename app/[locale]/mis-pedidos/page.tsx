@@ -1,10 +1,12 @@
 'use client'
 
+'use client'
+
 import { useState } from 'react'
 import {
   ShoppingCart, Truck, Warehouse, Anchor, Ship,
   ClipboardCheck, Gift, CheckCircle2, Plus, ChevronDown,
-  ChevronUp, Package, DollarSign
+  ChevronUp, Package, DollarSign, Hash, Loader2
 } from 'lucide-react'
 
 type OrderStatus =
@@ -38,11 +40,24 @@ interface Order {
   ready_pickup_at: string | null
   delivered_at: string | null
   pool?: {
+    pool_number: number
     origin_city: string
     destination: string
     day_number: number
     current_volume_m3: number
+    carrier_rate: number
   } | null
+}
+
+interface AvailablePool {
+  id: string
+  pool_number: number
+  origin_city: string
+  destination: string
+  current_volume_m3: number
+  day_number: number
+  carrier_rate: number
+  estimatedPrice: number
 }
 
 const STATUSES: { key: OrderStatus; label: string; icon: React.ElementType; desc: string }[] = [
@@ -80,7 +95,107 @@ function fmt(date: string | null) {
   return new Date(date).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function OrderCard({ order }: { order: Order }) {
+function PoolSelector({ order, onJoined }: { order: Order; onJoined: () => void }) {
+  const [pools, setPools] = useState<AvailablePool[]>([])
+  const [loading, setLoading] = useState(false)
+  const [joining, setJoining] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState('')
+
+  async function loadPools() {
+    setOpen(true)
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/pools')
+      const data = await res.json()
+      const vol = order.estimated_volume_m3 ?? 0.5
+      const filtered = (data.pools as AvailablePool[])
+        .filter((p) => p.origin_city === order.origin_city)
+        .map((p) => {
+          const after = p.current_volume_m3 + vol
+          // simple price estimate: tiers
+          const rate = after > 20 ? 80 : after > 15 ? 85 : after > 5 ? 90 : 100
+          const savings = 100 - rate
+          const dayPct = Math.max(10, 100 - p.day_number * 10)
+          const price = 100 - savings * (dayPct / 100)
+          return { ...p, estimatedPrice: price }
+        })
+        .sort((a, b) => a.estimatedPrice - b.estimatedPrice)
+      setPools(filtered)
+    } catch {
+      setError('No se pudieron cargar los pools')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function joinPool(poolId: string) {
+    setJoining(poolId)
+    setError('')
+    try {
+      const res = await fetch(`/api/orders/${order.id}/join-pool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pool_id: poolId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setOpen(false)
+      onJoined()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error')
+    } finally {
+      setJoining(null)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={loadPools}
+        className="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-2.5 rounded-xl text-sm transition-colors"
+      >
+        <Anchor className="w-4 h-4" /> Unirme a un pool
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-3 bg-gray-800 rounded-xl p-4">
+      <p className="text-white font-semibold text-sm mb-3">Pools disponibles — {CITY_LABEL[order.origin_city]}</p>
+      {loading && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-emerald-400 animate-spin" /></div>}
+      {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
+      {pools.length === 0 && !loading && (
+        <p className="text-gray-500 text-sm text-center py-2">No hay pools activos para {CITY_LABEL[order.origin_city]}</p>
+      )}
+      <div className="space-y-2">
+        {pools.map((pool, idx) => (
+          <div key={pool.id} className={`rounded-xl p-3 border ${idx === 0 ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-gray-700 bg-gray-900'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                {idx === 0 && <span className="text-xs text-emerald-400 font-bold">Mejor descuento · </span>}
+                <span className="text-white font-mono font-bold text-sm">Pool #{String(pool.pool_number).padStart(3, '0')}</span>
+                <span className="text-gray-500 text-xs ml-2">Día {pool.day_number}/10 · {pool.current_volume_m3.toFixed(1)} m³</span>
+              </div>
+              <span className="text-emerald-400 font-bold font-mono">${pool.estimatedPrice.toFixed(2)}/m³</span>
+            </div>
+            <button
+              onClick={() => joinPool(pool.id)}
+              disabled={joining === pool.id}
+              className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs transition-colors"
+            >
+              {joining === pool.id ? 'Uniéndome...' : `Unirme al Pool #${String(pool.pool_number).padStart(3, '0')}`}
+            </button>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => setOpen(false)} className="mt-2 w-full text-gray-600 text-xs hover:text-gray-400">Cancelar</button>
+    </div>
+  )
+}
+
+function OrderCard({ order, onRefresh }: { order: Order; onRefresh: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const currentIdx = STATUS_INDEX[order.status]
   const currentStatus = STATUSES[currentIdx]
@@ -129,16 +244,29 @@ function OrderCard({ order }: { order: Order }) {
           </button>
         </div>
 
-        {/* Pool info if in pool */}
+        {/* Pool number badge — always visible when in pool */}
         {order.status === 'in_pool' && order.pool && (
-          <div className="mt-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-xs">
-            <p className="text-blue-400 font-medium mb-1">Pool activo</p>
-            <div className="flex gap-4 text-gray-400">
+          <div className="mt-3 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-blue-400" />
+                <span className="text-blue-400 font-bold text-sm">
+                  Pool #{String(order.pool.pool_number).padStart(3, '0')}
+                </span>
+              </div>
+              <span className="text-emerald-400 font-bold font-mono text-sm">${order.price_per_m3}/m³</span>
+            </div>
+            <div className="flex gap-3 mt-1 text-gray-500 text-xs">
               <span>Día {order.pool.day_number}/10</span>
               <span>{order.pool.current_volume_m3.toFixed(1)} m³ acumulado</span>
               <span>{CITY_LABEL[order.pool.origin_city]} → {order.pool.destination}</span>
             </div>
           </div>
+        )}
+
+        {/* Manual pool selection when at warehouse */}
+        {order.status === 'at_warehouse' && (
+          <PoolSelector order={order} onJoined={onRefresh} />
         )}
       </div>
 
@@ -444,12 +572,12 @@ export default function MisPedidosPage() {
               </div>
             )}
 
-            {active.map(o => <OrderCard key={o.id} order={o} />)}
+            {active.map(o => <OrderCard key={o.id} order={o} onRefresh={() => loadOrders(activeCode)} />)}
 
             {delivered.length > 0 && (
               <div>
                 <p className="text-gray-600 text-xs uppercase tracking-widest mb-3">Entregados</p>
-                {delivered.map(o => <OrderCard key={o.id} order={o} />)}
+                {delivered.map(o => <OrderCard key={o.id} order={o} onRefresh={() => loadOrders(activeCode)} />)}
               </div>
             )}
           </div>

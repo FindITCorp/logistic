@@ -8,7 +8,7 @@ export async function GET() {
       .from('pools')
       .select('*')
       .eq('status', 'active')
-      .order('created_at', { ascending: true })
+      .order('pool_number', { ascending: true })
 
     if (error) throw error
     return NextResponse.json({ pools })
