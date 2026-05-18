@@ -25,6 +25,9 @@ export interface Pool {
   day_number: number         // 1–10
   status: PoolStatus
   carrier_rate: number
+  provider_id: string | null
+  reference_price_m3: number
+  departure_date: string | null
   created_at: string
 }
 

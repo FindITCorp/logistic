@@ -1,11 +1,25 @@
 import { createServerClient } from './supabase/client'
-import { getCarrierRate, calculateClientPrice, DEFAULT_VOLUME_TIERS } from './pricing'
+import { getCarrierRate, calculateClientPrice, DEFAULT_VOLUME_TIERS, ProviderRate } from './pricing'
 import type { Pool, OriginCity } from './supabase/database.types'
 
 export interface AssignmentResult {
   pool: Pool
   pricePerM3: number
   reason: string
+}
+
+async function getProviderRates(
+  db: ReturnType<typeof createServerClient>,
+  providerId: string,
+  originCity: OriginCity,
+): Promise<ProviderRate[]> {
+  const { data } = await db
+    .from('provider_rates')
+    .select('min_volume_m3, max_volume_m3, rate_per_m3')
+    .eq('provider_id', providerId)
+    .eq('origin_city', originCity)
+    .order('min_volume_m3')
+  return (data ?? []) as ProviderRate[]
 }
 
 /**
@@ -34,19 +48,25 @@ export async function findBestPool(
 
   type Scored = { pool: Pool; score: number; crossesTier: boolean; pricePerM3: number; reason: string }
 
-  const scored: Scored[] = pools.map((pool) => {
+  const scored: Scored[] = await Promise.all(pools.map(async (pool) => {
+    const providerRates: ProviderRate[] = pool.provider_id
+      ? await getProviderRates(db, pool.provider_id, originCity)
+      : []
+
     const volumeAfter = pool.current_volume_m3 + volumeM3
-    const rateBefore = getCarrierRate(pool.current_volume_m3)
-    const rateAfter = getCarrierRate(volumeAfter)
+    const rateBefore = getCarrierRate(pool.current_volume_m3, providerRates)
+    const rateAfter = getCarrierRate(volumeAfter, providerRates)
     const crossesTier = rateAfter < rateBefore
 
-    // How close is the pool to the next tier threshold?
-    const nextTier = DEFAULT_VOLUME_TIERS.find((t) => t.minM3 > pool.current_volume_m3)
+    const tiers = providerRates.length > 0
+      ? providerRates.map(r => ({ minM3: r.min_volume_m3, maxM3: r.max_volume_m3, carrierRate: r.rate_per_m3 }))
+      : DEFAULT_VOLUME_TIERS
+    const nextTier = tiers.find((t) => t.minM3 > pool.current_volume_m3)
     const gapToNextTier = nextTier ? nextTier.minM3 - pool.current_volume_m3 : Infinity
 
-    const { clientPrice } = calculateClientPrice(pool.day_number, volumeAfter)
+    const referencePrice: number = pool.reference_price_m3 ?? 100
+    const { clientPrice } = calculateClientPrice(pool.day_number, volumeAfter, providerRates, referencePrice)
 
-    // Score: crossing a tier = big bonus, otherwise penalize by gap and days spent
     const score = crossesTier
       ? 10000 - gapToNextTier
       : 1000 - gapToNextTier + (10 - pool.day_number) * 10
@@ -56,7 +76,7 @@ export async function findBestPool(
       : `Pool más cercano al siguiente nivel (faltan ${gapToNextTier.toFixed(2)}m³)`
 
     return { pool, score, crossesTier, pricePerM3: clientPrice, reason }
-  })
+  }))
 
   scored.sort((a, b) => b.score - a.score)
   const best = scored[0]
@@ -80,7 +100,10 @@ export async function assignShipmentToPool(shipmentId: string): Promise<Assignme
 
   const { pool, pricePerM3 } = result
 
-  // Assign shipment to pool
+  const providerRates: ProviderRate[] = pool.provider_id
+    ? await getProviderRates(db, pool.provider_id, shipment.origin_city)
+    : []
+
   await db.from('shipments').update({
     pool_id: pool.id,
     status: 'assigned',
@@ -88,7 +111,6 @@ export async function assignShipmentToPool(shipmentId: string): Promise<Assignme
     assigned_at: new Date().toISOString(),
   }).eq('id', shipmentId)
 
-  // Add pool member record
   await db.from('pool_members').insert({
     pool_id: pool.id,
     shipment_id: shipmentId,
@@ -97,11 +119,10 @@ export async function assignShipmentToPool(shipmentId: string): Promise<Assignme
     price_per_m3: pricePerM3,
   })
 
-  // Update pool totals
   await db.from('pools').update({
     current_volume_m3: pool.current_volume_m3 + shipment.volume_m3,
     participants: pool.participants + 1,
-    carrier_rate: getCarrierRate(pool.current_volume_m3 + shipment.volume_m3),
+    carrier_rate: getCarrierRate(pool.current_volume_m3 + shipment.volume_m3, providerRates),
   }).eq('id', pool.id)
 
   return result
