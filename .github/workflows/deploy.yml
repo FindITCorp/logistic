@@ -16,21 +16,33 @@ jobs:
       - name: Deploy to Vercel
         id: deploy
         run: |
-          URL=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -E "https://.*\.vercel\.app" | tail -1)
+          # Deploy and strip ANSI escape codes from output
+          DEPLOY_OUT=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | sed 's/\x1B\[[0-9;]*[mK]//g')
+          echo "$DEPLOY_OUT"
+
+          # Try multiple URL patterns (Vercel CLI format changed across versions)
+          URL=$(echo "$DEPLOY_OUT" | grep -oP "https://[^\s']+" | grep "vercel\.app" | tail -1)
+          if [ -z "$URL" ]; then
+            URL=$(echo "$DEPLOY_OUT" | grep -oP "https://[^\s']+" | tail -1)
+          fi
+
           echo "url=$URL" >> $GITHUB_OUTPUT
-          echo "## Deployed!" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployed to Vercel" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
           echo "Production URL: $URL"
 
       - name: Post URL as commit comment
-        if: steps.deploy.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-          curl -s -X POST \
-            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"body\":\"Deployed to Vercel\n\nURL: $URL\"}"
-          echo "URL posted: $URL"
+          if [ -n "$URL" ]; then
+            curl -s -X POST \
+              "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"body\":\"Deployed to Vercel\n\nURL: $URL\"}"
+            echo "Comment posted with URL: $URL"
+          else
+            echo "No URL captured from deploy output"
+          fi
