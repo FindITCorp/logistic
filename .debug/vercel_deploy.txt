@@ -1,0 +1,23 @@
+=== vercel link ===
+> NOTE: The Vercel CLI now collects telemetry regarding usage of the CLI.
+> This information is used to shape the CLI roadmap and prioritize features.
+> You can learn more, including how to opt-out if you'd not like to participate in this program, by visiting the following URL:
+> https://vercel.com/docs/cli/about-telemetry
+
+  Set up "~/work/logistic/logistic"
+Searching for existing projects…
+Loading teams…
+Error: The token provided via `--token` argument is not valid. Please provide a valid token.
+link exit: 1
+=== project.json ===
+cat: .vercel/project.json: No such file or directory
+(none)
+=== vercel deploy ===
+
+  Set up "~/work/logistic/logistic"
+Loading teams…
+Error: The token provided via `--token` argument is not valid. Please provide a valid token.
+deploy exit: 1
+=== all urls ===
+grep: /tmp/debug.txt: input file is also the output
+(none)
