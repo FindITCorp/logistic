@@ -6,24 +6,18 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+cd "$CLAUDE_PROJECT_DIR"
+
 # Instalar dependencias Node
-if [ -f "$CLAUDE_PROJECT_DIR/package-lock.json" ]; then
-  cd "$CLAUDE_PROJECT_DIR"
-  npm install
+if [ -f "package-lock.json" ]; then
+  npm install --prefer-offline 2>/dev/null || npm install
 fi
 
-# Cargar tokens si existen
+# Cargar tokens si existen y exportarlos al entorno de la sesión
 if [ -f "/root/.claude/.tokens" ]; then
   source /root/.claude/.tokens
-fi
-
-# Configurar git remote con token de GitHub (si está disponible)
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-  cd "$CLAUDE_PROJECT_DIR"
-  git remote set-url origin "https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git"
-fi
-
-# Exportar tokens al entorno de la sesión para que Claude los use
-if [ -f "/root/.claude/.tokens" ]; then
   cat /root/.claude/.tokens >> "$CLAUDE_ENV_FILE"
+
+  # Configurar git remote con token
+  git remote set-url origin "https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git" 2>/dev/null || true
 fi
