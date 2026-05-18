@@ -39,30 +39,15 @@ jobs:
           echo "URL from CLI: '$URL'"
           if [ -z "$URL" ] && [ -n "$PROJECT_ID" ]; then
             echo "Querying Vercel API for production URL..."
-            API_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=3&target=production")
+            API_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=3&target=production")
             echo "API response: $API_RESP"
-            URL=$(echo "$API_RESP" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for dep in d.get('deployments',[]):
-    if dep.get('state') in ('READY','BUILDING'):
-        u = dep.get('url','')
-        if u: print('https://' + u); break
-" 2>/dev/null || echo "")
+            URL=$(echo "$API_RESP" | python3 -c "import json,sys; deps=json.load(sys.stdin).get('deployments',[]); r=[d for d in deps if d.get('state') in ('READY','BUILDING') and d.get('url')]; print('https://'+r[0]['url'] if r else '')" 2>/dev/null || echo "")
           fi
           if [ -z "$URL" ] && [ -n "$PROJECT_ID" ]; then
             echo "Trying project aliases..."
-            ALIAS_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
-              "https://api.vercel.com/v4/projects/$PROJECT_ID/aliases?limit=1")
+            ALIAS_RESP=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/projects/$PROJECT_ID/aliases?limit=1")
             echo "Alias response: $ALIAS_RESP"
-            URL=$(echo "$ALIAS_RESP" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for a in d.get('aliases',[]):
-    u = a.get('alias','')
-    if 'vercel.app' in u: print('https://' + u); break
-" 2>/dev/null || echo "")
+            URL=$(echo "$ALIAS_RESP" | python3 -c "import json,sys; als=json.load(sys.stdin).get('aliases',[]); r=[a for a in als if 'vercel.app' in a.get('alias','')]; print('https://'+r[0]['alias'] if r else '')" 2>/dev/null || echo "")
           fi
           echo "=== FINAL URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
