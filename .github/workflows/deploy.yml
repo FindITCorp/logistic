@@ -15,52 +15,22 @@ jobs:
 
       - name: Deploy to Vercel
         id: deploy
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1)
-          echo "$DEPLOY_OUT"
-          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9_-]+\.vercel\.app" | tail -1)
+          URL=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -E "https://.*\.vercel\.app" | tail -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
-          echo "## Deployed to Vercel" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployed!" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** $URL" >> $GITHUB_STEP_SUMMARY
-
-      - name: Update NEXT_PUBLIC_SITE_URL
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          URL="${{ steps.deploy.outputs.url }}"
-          if [ -z "$URL" ]; then
-            echo "No URL captured, skipping"
-            exit 0
-          fi
-          PROJECT_ID=$(curl -sf "https://api.vercel.com/v9/projects" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | python3 -c "
-          import sys,json
-          projects = json.load(sys.stdin).get('projects', [])
-          match = next((p for p in projects if 'logistic' in p['name'].lower()), None)
-          print((match or {}).get('id',''))
-          " 2>/dev/null || echo "")
-          if [ -n "$PROJECT_ID" ]; then
-            curl -sf -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
-              -H "Authorization: Bearer $VERCEL_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"key\":\"NEXT_PUBLIC_SITE_URL\",\"value\":\"$URL\",\"type\":\"plain\",\"target\":[\"production\"]}" \
-              > /dev/null 2>&1 || true
-            echo "Set NEXT_PUBLIC_SITE_URL=$URL"
-          fi
+          echo "Production URL: $URL"
 
       - name: Post URL as commit comment
+        if: steps.deploy.outputs.url != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-          if [ -n "$URL" ]; then
-            curl -s -X POST \
-              "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"body\":\"Deployed to Vercel\\n\\nURL: $URL\"}" > /dev/null
-            echo "Posted URL comment: $URL"
-          fi
+          curl -s -X POST \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"body\":\"Deployed to Vercel\n\nURL: $URL\"}"
+          echo "URL posted: $URL"
