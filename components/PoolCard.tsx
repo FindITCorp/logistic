@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import {
   calculateClientPrice,
   formatCurrency,
-  REFERENCE_PRICE,
+  DEFAULT_REFERENCE_PRICE,
   POOL_DURATION_DAYS,
 } from '@/lib/pricing';
 import JoinPoolModal from './JoinPoolModal';
@@ -63,7 +63,7 @@ export default function PoolCard({ pool }: PoolCardProps) {
             <div>
               <p className="text-xs text-slate-500">{t('referencePrice')} *</p>
               <p className="text-3xl font-bold text-slate-900 leading-none">
-                {formatCurrency(REFERENCE_PRICE)}
+                {formatCurrency(DEFAULT_REFERENCE_PRICE)}
                 <span className="text-base font-normal text-slate-500">/m³</span>
               </p>
             </div>
@@ -83,7 +83,7 @@ export default function PoolCard({ pool }: PoolCardProps) {
               <div className="text-right">
                 <p className="text-xs text-slate-500">{t('yourPriceToday')}</p>
                 <p className="text-2xl font-bold text-slate-700 leading-none">
-                  {formatCurrency(REFERENCE_PRICE)}
+                  {formatCurrency(DEFAULT_REFERENCE_PRICE)}
                   <span className="text-sm font-normal text-slate-500">/m³</span>
                 </p>
                 <p className="text-xs text-slate-400">{t('noSavingsYet')}</p>

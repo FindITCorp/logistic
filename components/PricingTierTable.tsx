@@ -4,10 +4,10 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   POOL_DURATION_DAYS,
-  VOLUME_TIERS,
+  DEFAULT_VOLUME_TIERS,
   calculateClientPrice,
   formatCurrency,
-  REFERENCE_PRICE,
+  DEFAULT_REFERENCE_PRICE,
 } from '@/lib/pricing';
 
 export default function PricingTierTable() {
@@ -18,7 +18,7 @@ export default function PricingTierTable() {
   const maxVol = 25;
 
   // Tier change points for slider markers
-  const tierBreaks = VOLUME_TIERS.filter((tier) => tier.minM3 > 0).map((tier) => tier.minM3);
+  const tierBreaks = DEFAULT_VOLUME_TIERS.filter((tier) => tier.minM3 > 0).map((tier) => tier.minM3);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
@@ -31,8 +31,8 @@ export default function PricingTierTable() {
       <div>
         <p className="text-sm font-medium text-slate-700 mb-3">{t('volumeTiersTitle')}</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {VOLUME_TIERS.map((tier) => {
-            const discount = REFERENCE_PRICE - tier.carrierRate;
+          {DEFAULT_VOLUME_TIERS.map((tier) => {
+            const discount = DEFAULT_REFERENCE_PRICE - tier.carrierRate;
             const active = volumeM3 >= tier.minM3 && (tier.maxM3 === null || volumeM3 < tier.maxM3);
             return (
               <div
@@ -47,7 +47,7 @@ export default function PricingTierTable() {
                   {tier.maxM3 ? `${tier.minM3}–${tier.maxM3} m³` : `+${tier.minM3} m³`}
                 </p>
                 <p className={`text-xl font-extrabold mt-1 ${active ? 'text-emerald-700' : 'text-slate-900'}`}>
-                  {formatCurrency(REFERENCE_PRICE - discount)}/m³
+                  {formatCurrency(DEFAULT_REFERENCE_PRICE - discount)}/m³
                 </p>
                 <p className={`text-xs font-semibold mt-0.5 ${discount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                   {discount > 0 ? `${t('youSave')} $${discount}` : t('noSavings')}
@@ -78,8 +78,8 @@ export default function PricingTierTable() {
           <div className="relative w-full h-0">
             {tierBreaks.map((vol) => {
               const pct = (vol / maxVol) * 100;
-              const tier = VOLUME_TIERS.find((t) => t.minM3 === vol);
-              const discount = tier ? REFERENCE_PRICE - tier.carrierRate : 0;
+              const tier = DEFAULT_VOLUME_TIERS.find((t) => t.minM3 === vol);
+              const discount = tier ? DEFAULT_REFERENCE_PRICE - tier.carrierRate : 0;
               return (
                 <div
                   key={vol}
@@ -88,7 +88,7 @@ export default function PricingTierTable() {
                 >
                   <div className="w-px h-2 bg-emerald-500" />
                   <span className="text-xs text-emerald-700 font-semibold whitespace-nowrap">
-                    {vol}m³ → ${REFERENCE_PRICE - discount}/m³
+                    {vol}m³ → ${DEFAULT_REFERENCE_PRICE - discount}/m³
                   </span>
                 </div>
               );
@@ -154,7 +154,7 @@ export default function PricingTierTable() {
       </div>
 
       <p className="text-xs text-slate-400">
-        * {t('referenceNote2', { price: formatCurrency(REFERENCE_PRICE) })}
+        * {t('referenceNote2', { price: formatCurrency(DEFAULT_REFERENCE_PRICE) })}
       </p>
     </div>
   );

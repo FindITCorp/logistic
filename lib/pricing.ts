@@ -1,43 +1,54 @@
 export const POOL_DURATION_DAYS = 10;
 
-export const REFERENCE_PRICE = 100;
+// Default reference price (max the client ever pays) — overridable per pool
+export const DEFAULT_REFERENCE_PRICE = 100;
 
-// Carrier bulk rates by volume tier (m³)
+// Fallback static tiers — used when no provider is configured
 export interface VolumeTier {
   minM3: number;
   maxM3: number | null;
   carrierRate: number;
 }
 
-export const VOLUME_TIERS: VolumeTier[] = [
+export const DEFAULT_VOLUME_TIERS: VolumeTier[] = [
   { minM3: 0,  maxM3: 5,    carrierRate: 100 },
   { minM3: 5,  maxM3: 15,   carrierRate: 90  },
   { minM3: 15, maxM3: 20,   carrierRate: 85  },
   { minM3: 20, maxM3: null, carrierRate: 80  },
 ];
 
-// Savings distribution % by day joined (1=earliest/most reward, 10=latest/floor)
-// Day 1 (10 days left) = 90%, Day 5 (5 days left) = 50%, linear -10%/day, floor 10%
+// Savings distribution % by day joined — linear -10%/day, floor 10%
 export const DAY_SAVINGS_PCT: Record<number, number> = {
-  1:  90,
-  2:  80,
-  3:  70,
-  4:  60,
-  5:  50,
-  6:  40,
-  7:  30,
-  8:  20,
-  9:  10,
-  10: 10,
+  1: 90, 2: 80, 3: 70, 4: 60, 5: 50,
+  6: 40, 7: 30, 8: 20, 9: 10, 10: 10,
 };
 
-export function getCarrierRate(volumeM3: number): number {
-  const tier = VOLUME_TIERS.slice().reverse().find((t) => volumeM3 >= t.minM3);
-  return tier ? tier.carrierRate : VOLUME_TIERS[0].carrierRate;
+// ─── Provider-aware rate lookup ───────────────────────────────────────────────
+
+export interface ProviderRate {
+  min_volume_m3: number;
+  max_volume_m3: number | null;
+  rate_per_m3: number;
 }
 
-export function getDistributableSavings(volumeM3: number): number {
-  return REFERENCE_PRICE - getCarrierRate(volumeM3);
+/**
+ * Get the provider's cost for a given pool volume.
+ * Falls back to the static default tiers when no provider rates are supplied.
+ */
+export function getCarrierRate(
+  volumeM3: number,
+  providerRates?: ProviderRate[],
+): number {
+  const tiers = providerRates && providerRates.length > 0
+    ? providerRates.map(r => ({
+        minM3: r.min_volume_m3,
+        maxM3: r.max_volume_m3,
+        carrierRate: r.rate_per_m3,
+      }))
+    : DEFAULT_VOLUME_TIERS;
+
+  const match = tiers.slice().reverse().find(t => volumeM3 >= t.minM3);
+  return match ? match.carrierRate : tiers[0].carrierRate;
 }
 
 export function getSavingsPct(dayJoined: number): number {
@@ -56,22 +67,25 @@ export interface ClientPriceResult {
 }
 
 /**
- * Calculate the price a client would pay if they join on `dayJoined`
- * with the pool currently at `currentVolumeM3`.
+ * Calculate the price a client pays when joining on `dayJoined`
+ * with the pool at `currentVolumeM3`, using optional provider-specific rates
+ * and an optional reference price override.
  */
 export function calculateClientPrice(
   dayJoined: number,
   currentVolumeM3: number,
+  providerRates?: ProviderRate[],
+  referencePrice: number = DEFAULT_REFERENCE_PRICE,
 ): ClientPriceResult {
-  const carrierRate = getCarrierRate(currentVolumeM3);
-  const distributableSavings = REFERENCE_PRICE - carrierRate;
+  const carrierRate = getCarrierRate(currentVolumeM3, providerRates);
+  const distributableSavings = referencePrice - carrierRate;
   const savingsPct = getSavingsPct(dayJoined);
   const clientDiscount = distributableSavings * (savingsPct / 100);
-  const clientPrice = REFERENCE_PRICE - clientDiscount;
+  const clientPrice = referencePrice - clientDiscount;
   const companyMargin = clientPrice - carrierRate;
 
   return {
-    referencePrice: REFERENCE_PRICE,
+    referencePrice,
     carrierRate,
     distributableSavings,
     savingsPct,
