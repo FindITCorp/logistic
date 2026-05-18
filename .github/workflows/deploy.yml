@@ -21,20 +21,28 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          echo "=== Vercel CLI version ==="
           vercel --version
-          echo "=== Linking project ==="
-          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || echo "link step exited non-zero"
-          echo "=== project.json ==="
-          cat .vercel/project.json 2>/dev/null || echo "no project.json created"
-          echo "=== Deploying ==="
+          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || true
+          cat .vercel/project.json 2>/dev/null || echo "no project.json"
           DEPLOY_OUT=$(vercel deploy --prod --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
           echo "$DEPLOY_OUT"
-          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
-          echo "=== URL: $URL ==="
-          echo "url=$URL" >> $GITHUB_OUTPUT
-          PROJECT_NAME=$(python3 -c "import json; d=json.load(open('.vercel/project.json')); print(d.get('projectId',''))" 2>/dev/null || echo "")
-          echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          PROD_URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | tail -1)
+          INSPECT_URL=$(echo "$DEPLOY_OUT" | grep -oE "https://vercel\.com/[a-zA-Z0-9._/-]+" | tail -1)
+          echo "prod_url=$PROD_URL inspect_url=$INSPECT_URL"
+          PROJECT_ID=$(python3 -c "import json; print(json.load(open('.vercel/project.json'))['projectId'])" 2>/dev/null || echo "")
+          if [ -z "$PROD_URL" ] && [ -n "$PROJECT_ID" ]; then
+            API=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID")
+            echo "Project API: $API"
+            PROD_URL=$(echo "$API" | python3 -c "import json,sys; d=json.load(sys.stdin); aliases=d.get('alias',[]); r=[a for a in aliases if isinstance(a,str) and 'vercel.app' in a]; print('https://'+r[0] if r else '')" 2>/dev/null || echo "")
+          fi
+          if [ -z "$PROD_URL" ] && [ -n "$PROJECT_ID" ]; then
+            DEPS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT_ID/deployments?limit=5&target=production")
+            echo "Deployments API: $DEPS"
+            PROD_URL=$(echo "$DEPS" | python3 -c "import json,sys; deps=json.load(sys.stdin).get('deployments',[]); r=[d for d in deps if d.get('state')=='READY' and d.get('url')]; print('https://'+r[0]['url'] if r else '')" 2>/dev/null || echo "")
+          fi
+          FINAL_URL="${PROD_URL:-$INSPECT_URL}"
+          echo "=== FINAL URL: $FINAL_URL ==="
+          echo "url=$FINAL_URL" >> $GITHUB_OUTPUT
 
       - name: Post URL as commit comment
         if: always()
@@ -42,11 +50,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-          PROJ="${{ steps.deploy.outputs.project_name }}"
           if [ -n "$URL" ]; then
             MSG="Deployed!\n\n$URL"
-          elif [ -n "$PROJ" ]; then
-            MSG="Deployed project id: $PROJ\nURL not captured — see vercel.com/dashboard"
           else
             MSG="Deploy ran — check Actions logs"
           fi
