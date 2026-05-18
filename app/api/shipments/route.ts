@@ -9,6 +9,7 @@ const schema = z.object({
   weight_kg: z.number().positive(),
   volume_m3: z.number().positive(),
   origin_city: z.enum(['shanghai', 'guangzhou', 'shenzhen']),
+  supplier_tracking: z.string().optional(), // link to pre-registered order
 })
 
 export async function POST(req: NextRequest) {
@@ -39,25 +40,61 @@ export async function POST(req: NextRequest) {
 
     if (error || !shipment) throw new Error(error?.message ?? 'Error al registrar envío')
 
+    // Link to pre-registered order if tracking provided or by client_code + pending status
+    let order: { id: string } | null = null
+    if (input.supplier_tracking) {
+      const { data } = await db
+        .from('orders')
+        .select('id')
+        .eq('supplier_tracking', input.supplier_tracking)
+        .eq('status', 'in_transit_to_warehouse')
+        .maybeSingle()
+      order = data
+    }
+    if (!order) {
+      // Match oldest pending order for this client
+      const { data } = await db
+        .from('orders')
+        .select('id')
+        .eq('client_code', client.client_code)
+        .in('status', ['ordered', 'in_transit_to_warehouse'])
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      order = data
+    }
+
+    if (order) {
+      await db.from('orders').update({
+        status: 'at_warehouse',
+        shipment_id: shipment.id,
+        arrived_warehouse_at: new Date().toISOString(),
+      }).eq('id', order.id)
+    }
+
     if (client.assignment_mode === 'auto') {
-      // Auto-assign to best pool immediately
       const result = await assignShipmentToPool(shipment.id)
+
+      // Update order status to in_pool
+      if (order) {
+        await db.from('orders').update({
+          status: 'in_pool',
+          pool_id: result.pool.id,
+          price_per_m3: result.pricePerM3,
+          assigned_pool_at: new Date().toISOString(),
+        }).eq('id', order.id)
+      }
+
       return NextResponse.json({
-        shipment,
-        assigned: true,
-        pool: result.pool,
-        price_per_m3: result.pricePerM3,
-        reason: result.reason,
-        client,
+        shipment, assigned: true,
+        pool: result.pool, price_per_m3: result.pricePerM3,
+        reason: result.reason, client,
       }, { status: 201 })
     } else {
-      // Manual mode — find best suggestion but don't assign yet
       const suggestion = await findBestPool(input.origin_city, input.volume_m3)
       return NextResponse.json({
-        shipment,
-        assigned: false,
-        suggestion,
-        client,
+        shipment, assigned: false,
+        suggestion, client,
         select_url: `/pools/unirme?shipment=${shipment.id}`,
       }, { status: 201 })
     }

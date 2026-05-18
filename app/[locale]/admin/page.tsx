@@ -20,6 +20,7 @@ export default function AdminPage() {
     weight_kg: '',
     volume_m3: '',
     origin_city: 'guangzhou' as 'shanghai' | 'guangzhou' | 'shenzhen',
+    supplier_tracking: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -39,12 +40,13 @@ export default function AdminPage() {
           weight_kg: parseFloat(form.weight_kg),
           volume_m3: parseFloat(form.volume_m3),
           origin_city: form.origin_city,
+          supplier_tracking: form.supplier_tracking || undefined,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResult(data)
-      setForm({ client_code: '', weight_kg: '', volume_m3: '', origin_city: 'guangzhou' })
+      setForm({ client_code: '', weight_kg: '', volume_m3: '', origin_city: 'guangzhou', supplier_tracking: '' })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al registrar')
     } finally {
@@ -109,6 +111,17 @@ export default function AdminPage() {
                 placeholder="0.250"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Tracking del proveedor</label>
+            <input
+              type="text"
+              value={form.supplier_tracking}
+              onChange={(e) => setForm({ ...form, supplier_tracking: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm font-mono"
+              placeholder="LY123456789CN (opcional, vincula al pedido pre-registrado)"
+            />
           </div>
 
           <div>
