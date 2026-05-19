@@ -225,6 +225,14 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - Agregar GITHUB_TOKEN_NOTIFY en Vercel env vars para que el fallback de leads funcione
 - Conectar formulario "Unirme al pool" a Supabase (actualmente muestra confirmación mock)
 
+### Supabase DB — Estado de migraciones (actualizado 19 mayo 2026):
+- Todas las migraciones (001-005) aplicadas ✅ vía GitHub Actions
+- Tablas en producción: clients, pools, shipments, pool_members, orders, providers, provider_rates, leads
+- _migrations tracking table: activa
+- GitHub Action: `.github/workflows/migrate.yml` — usa Management API HTTPS (bypasa IP allowlist)
+- Script: `.github/scripts/migrate.py` — Python + curl, detecta objetos ya existentes
+- Para correr SQL ad-hoc: GitHub Actions → "Run SQL Query (Manual)" workflow
+
 ### Próximas mejoras de negocio:
 - Contactar los 3-5 forwarders top de docs/china-partners.md para validar tarifas reales
 - Lanzar campaña en grupos de Facebook/WhatsApp de importadores panameños
