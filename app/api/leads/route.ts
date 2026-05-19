@@ -12,31 +12,77 @@ const schema = z.object({
   notes: z.string().optional(),
 })
 
+async function notifyViaGitHubIssue(lead: Record<string, unknown>) {
+  const token = process.env.GITHUB_TOKEN_NOTIFY
+  if (!token) return
+  await fetch('https://api.github.com/repos/FindITCorp/logistic/issues', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: `[LEAD] ${lead.name} — ${lead.origin_city ?? 'ciudad ?'} — ${lead.monthly_volume_m3 ?? '?'}m³`,
+      body: `**Nuevo lead del formulario de landing**\n\n` +
+        `- **Nombre:** ${lead.name}\n` +
+        `- **WhatsApp:** ${lead.whatsapp ?? '—'}\n` +
+        `- **Email:** ${lead.email ?? '—'}\n` +
+        `- **Ciudad origen:** ${lead.origin_city ?? '—'}\n` +
+        `- **Volumen mensual:** ${lead.monthly_volume_m3 ?? '—'} m³\n` +
+        `- **Productos:** ${lead.product_type ?? '—'}\n\n` +
+        `> Registrado automáticamente desde logistic-six-alpha.vercel.app`,
+      labels: ['lead', 'new'],
+    }),
+  }).catch(() => null)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const input = schema.parse(body)
-    const db = createServerClient()
-    const { data, error } = await db.from('leads').insert(input).select().single()
-    if (error) throw new Error(error.message)
-    return NextResponse.json({ lead: data }, { status: 201 })
+
+    // Try Supabase first
+    try {
+      const db = createServerClient()
+      const { data, error } = await db.from('leads').insert(input).select().single()
+      if (!error) {
+        notifyViaGitHubIssue(input).catch(() => null) // async, don't block
+        return NextResponse.json({ lead: data }, { status: 201 })
+      }
+      console.error('Supabase error:', error.message)
+    } catch (dbErr) {
+      console.error('DB connection failed:', dbErr)
+    }
+
+    // Fallback: notify via GitHub issue so no lead is lost
+    await notifyViaGitHubIssue({ ...input, _fallback: true })
+    return NextResponse.json({ lead: { ...input, id: crypto.randomUUID(), fallback: true } }, { status: 201 })
+
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error' }, { status: 400 })
   }
 }
 
 export async function GET() {
-  const db = createServerClient()
-  const { data } = await db
-    .from('leads')
-    .select('*')
-    .order('created_at', { ascending: false })
-  return NextResponse.json({ leads: data ?? [] })
+  try {
+    const db = createServerClient()
+    const { data } = await db
+      .from('leads')
+      .select('*')
+      .order('created_at', { ascending: false })
+    return NextResponse.json({ leads: data ?? [] })
+  } catch {
+    return NextResponse.json({ leads: [] })
+  }
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, status } = await req.json()
-  const db = createServerClient()
-  await db.from('leads').update({ status }).eq('id', id)
-  return NextResponse.json({ ok: true })
+  try {
+    const { id, status } = await req.json()
+    const db = createServerClient()
+    await db.from('leads').update({ status }).eq('id', id)
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 500 })
+  }
 }

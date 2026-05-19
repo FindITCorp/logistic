@@ -1,10 +1,9 @@
-name: Setup — DB Migration + Vercel Env Vars
+name: Setup — DB Migrations + Vercel Env Vars
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - claude/continue-work-5DQ9A
+    branches: [main]
     paths:
       - 'supabase/migrations/**'
       - '.github/workflows/setup.yml'
@@ -15,51 +14,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run all migrations via Management API
+
+      - name: Run migrations via Management API
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          for f in supabase/migrations/*.sql; do
-            echo "Running: $f"
-            RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" \
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            echo "=== Running: $f ==="
+            SQL=$(cat "$f")
+            PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'query': open(sys.argv[1]).read()}))" "$f")
+            RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
               -X POST "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/database/query" \
               -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"query\": $(python3 -c "import sys,json; print(json.dumps(open('$f').read()))")}")
-            HTTP=$(echo "$RESPONSE" | grep "HTTP:" | cut -d: -f2)
-            BODY=$(echo "$RESPONSE" | grep -v "HTTP:")
-            echo "Status: $HTTP | $BODY"
+              -d "$PAYLOAD")
+            echo "$RESP"
           done
 
   set-vercel-env:
     name: Set Vercel Environment Variables
     runs-on: ubuntu-latest
     steps:
-      - name: Set env vars
+      - name: Set env vars via Vercel API
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SITE_URL: "https://logistic-six-alpha.vercel.app"
         run: |
-          PROJECT_ID=$(curl -s "https://api.vercel.com/v9/projects" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | python3 -c "
-          import sys,json
-          projects = json.load(sys.stdin).get('projects', [])
-          match = next((p for p in projects if 'logistic' in p['name'].lower()), None)
-          print((match or projects[0])['id'] if projects else '')
-          ")
-          echo "Vercel Project: $PROJECT_ID"
+          PROJECT_ID="prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5"
+          TEAM_ID="team_BrCUd1PJnqaQTOuhJFrDYsw3"
 
           set_env() {
-            curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env" \
+            local key="$1" val="$2"
+            PAYLOAD=$(python3 -c "import json; print(json.dumps({'key':'$key','value':'$val','type':'encrypted','target':['production','preview']}))")
+            RESP=$(curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env?teamId=$TEAM_ID" \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"key\":\"$1\",\"value\":\"$2\",\"type\":\"encrypted\",\"target\":[\"production\",\"preview\",\"development\"]}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print('$1 →', d.get('key', d.get('error',{}).get('message','ok')))"
+              -d "$PAYLOAD")
+            echo "$key → $(echo $RESP | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('key', d.get('error',{}).get('message','?')))" 2>/dev/null)"
           }
 
-          set_env "NEXT_PUBLIC_SUPABASE_URL"     "$SUPABASE_URL"
-          set_env "NEXT_PUBLIC_SUPABASE_ANON_KEY" "$SUPABASE_ANON_KEY"
-          set_env "SUPABASE_SERVICE_ROLE_KEY"     "$SUPABASE_SERVICE_KEY"
+          set_env "NEXT_PUBLIC_SUPABASE_URL"      "$SUPABASE_URL"
+          set_env "NEXT_PUBLIC_SUPABASE_ANON_KEY" "$SUPABASE_ANON"
+          set_env "SUPABASE_SERVICE_ROLE_KEY"      "$SUPABASE_SERVICE"
+          set_env "NEXT_PUBLIC_SITE_URL"           "$SITE_URL"
+          echo "Done."
