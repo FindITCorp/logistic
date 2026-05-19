@@ -94,12 +94,13 @@ jobs:
             echo "Waiting 20s for propagation..."
             sleep 20
           else
-            echo "ERROR: Failed to update network restrictions (HTTP $HTTP_CODE)"
+            echo "WARNING: Failed to update network restrictions (HTTP $HTTP_CODE)"
+            echo "Continuing anyway — connection may fail if IP is not whitelisted."
             echo ""
             echo "To fix manually:"
             echo "  https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
             echo "  Add 0.0.0.0/0 to Allowed CIDRs"
-            exit 1
+            # Don't exit 1 — let the DB connection step show the actual error
           fi
 
       - name: Verify DB connection
