@@ -210,17 +210,25 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 **Capital:** NO INVERTIDO AÚN
 
 ### Últimos cambios deployados:
-- ✅ Modal "Unirme al pool" implementado (JoinPoolModal.tsx) — formulario con nombre, WhatsApp/email, volumen, validación, confirmación
-- ✅ PoolCard convertido a client component para manejar modal
-- ✅ Traducciones del modal en ES/EN
-- ✅ Sistema de captura de leads — formulario en landing + API /api/leads + admin /admin/leads con CRM mini
-- ✅ Pipeline de deploy GitHub Actions arreglado — usa vercel link + deploy con token válido
-- ✅ URL LIVE confirmada: https://logistic-six-alpha.vercel.app
+- ✅ Modal "Unirme al pool" (JoinPoolModal.tsx) — formulario completo
+- ✅ Sistema de captura de leads — /api/leads + admin CRM en /admin/leads
+- ✅ SavingsCalculator.tsx — calculadora interactiva con sliders de volumen y día
+- ✅ Landing mejorada — sección pain-point ($500 vs $82), badge de urgencia, social proof
+- ✅ API de leads robusta — fallback a GitHub Issue si Supabase falla (ningún lead se pierde)
+- ✅ Migraciones Supabase corridas via GitHub Actions (setup.yml)
+- ✅ Env vars de Vercel configuradas (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY, SERVICE_ROLE_KEY)
+- ✅ URL LIVE: https://logistic-six-alpha.vercel.app
+- ✅ docs/china-partners.md — lista de forwarders en China para contactar
 
 ### Pendiente técnico:
-- Conectar formulario "Unirme" a backend real (actualmente muestra confirmación mock — candidato: enviar a Google Sheets o WhatsApp API)
-- Correr migración SQL 005_leads.sql en Supabase (tabla leads para captura de leads)
-- Verificar que /api/health devuelva ok:true en producción
+- Verificar /api/health devuelva ok:true en producción (confirmar que migración de leads corrió)
+- Agregar GITHUB_TOKEN_NOTIFY en Vercel env vars para que el fallback de leads funcione
+- Conectar formulario "Unirme al pool" a Supabase (actualmente muestra confirmación mock)
+
+### Próximas mejoras de negocio:
+- Contactar los 3-5 forwarders top de docs/china-partners.md para validar tarifas reales
+- Lanzar campaña en grupos de Facebook/WhatsApp de importadores panameños
+- Ver docs/promo-plan.md para plantillas de mensajes listas
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
