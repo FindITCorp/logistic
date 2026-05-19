@@ -61,29 +61,35 @@ jobs:
           RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
           echo "Runner IP: $RUNNER_IP"
 
-          # Apply: open to 0.0.0.0/0 (all IPs) so any runner can connect
+          # First: check current restrictions
+          echo "--- GET current restrictions ---"
+          curl -s \
+            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" || true
+
+          echo ""
+          echo "--- PUT to open 0.0.0.0/0 ---"
+          # Try both camelCase and snake_case field names
           HTTP_CODE=$(curl -s -o /tmp/whitelist_resp.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -X PUT \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"dbAllowedCidrs": ["0.0.0.0/0"]}')
+            -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
           BODY=$(cat /tmp/whitelist_resp.txt)
-          echo "PUT /network/restrictions → HTTP $HTTP_CODE"
-          echo "Response body: $BODY"
+          echo "HTTP $HTTP_CODE: $BODY"
 
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-            echo "Network restrictions updated to allow 0.0.0.0/0"
-            echo "Waiting 15s for propagation..."
-            sleep 15
-          elif [ "$HTTP_CODE" = "204" ]; then
-            echo "Network restrictions updated (204 No Content)"
-            echo "Waiting 15s for propagation..."
-            sleep 15
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "204" ]; then
+            echo "Network restrictions updated to allow all IPs."
+            echo "Waiting 20s for propagation..."
+            sleep 20
           else
             echo "ERROR: Failed to update network restrictions (HTTP $HTTP_CODE)"
-            echo "You must manually add 0.0.0.0/0 to:"
+            echo "Body: $BODY"
+            echo ""
+            echo "To fix manually, go to:"
             echo "  https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
+            echo "  and add 0.0.0.0/0 to Allowed CIDRs"
             exit 1
           fi
 
