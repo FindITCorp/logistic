@@ -60,20 +60,31 @@ jobs:
           fi
           RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
           echo "Runner IP: $RUNNER_IP"
-          RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" \
+
+          # Apply: open to 0.0.0.0/0 (all IPs) so any runner can connect
+          HTTP_CODE=$(curl -s -o /tmp/whitelist_resp.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -X PUT \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"dbAllowedCidrs\": [\"${RUNNER_IP}/32\", \"0.0.0.0/0\"]}")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1 | sed 's/HTTP://')
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "Response ($HTTP_CODE): $BODY"
-          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
-            echo "Warning: could not whitelist IP — proceeding anyway"
+            -d '{"dbAllowedCidrs": ["0.0.0.0/0"]}')
+          BODY=$(cat /tmp/whitelist_resp.txt)
+          echo "PUT /network/restrictions → HTTP $HTTP_CODE"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+            echo "Network restrictions updated to allow 0.0.0.0/0"
+            echo "Waiting 15s for propagation..."
+            sleep 15
+          elif [ "$HTTP_CODE" = "204" ]; then
+            echo "Network restrictions updated (204 No Content)"
+            echo "Waiting 15s for propagation..."
+            sleep 15
           else
-            echo "IP $RUNNER_IP whitelisted. Waiting for network propagation..."
-            sleep 10
+            echo "ERROR: Failed to update network restrictions (HTTP $HTTP_CODE)"
+            echo "You must manually add 0.0.0.0/0 to:"
+            echo "  https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
+            exit 1
           fi
 
       - name: Verify DB connection
