@@ -1,97 +1,42 @@
 name: Run Supabase Migrations
 
+# Uses the Supabase Management API to run SQL migrations via HTTPS.
+# Bypasses DB IP allowlist entirely. Requires SUPABASE_ACCESS_TOKEN PAT.
+
 on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run (print SQL without executing)'
+        description: "Dry run (print SQL without executing)"
         required: false
-        default: 'false'
+        default: "false"
         type: choice
-        options: ['false', 'true']
+        options:
+          - "false"
+          - "true"
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/**'
+      - "supabase/migrations/**"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   migrate:
     name: Apply SQL Migrations
     runs-on: ubuntu-latest
 
+    env:
+      PROJECT_ID: fvefwnojcqbdkcmfngnu
+      MGMT_API: https://api.supabase.com/v1
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      MIGRATIONS_DIR: supabase/migrations
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Run migrations via PostgREST + Management API
-        env:
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-        run: |
-          PROJECT="fvefwnojcqbdkcmfngnu"
-          MGMT="https://api.supabase.com/v1/projects/${PROJECT}/database/query"
-
-          run_sql() {
-            local label="$1" sql="$2"
-            echo "  Running: $label"
-            PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'query': sys.argv[1]}))" "$sql")
-            RESP=$(curl -s -X POST "$MGMT" \
-              -H "Authorization: Bearer $ACCESS_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$PAYLOAD")
-            echo "  Response: $(echo $RESP | head -c 200)"
-            echo "$RESP"
-          }
-
-          check_table() {
-            local table="$1"
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              "${SUPABASE_URL}/rest/v1/${table}?limit=1" \
-              -H "apikey: $SERVICE_KEY" \
-              -H "Authorization: Bearer $SERVICE_KEY")
-            [ "$STATUS" = "200" ] && echo "exists" || echo "missing"
-          }
-
-          echo "=== Pre-migration table check ==="
-          for t in clients pools shipments orders providers leads; do
-            STATUS=$(check_table "$t")
-            echo "  $t: $STATUS"
-          done
-
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "DRY RUN — no changes executed."
-            exit 0
-          fi
-
-          echo ""
-          echo "=== Running migrations ==="
-          LEADS_STATUS=$(check_table "leads")
-          if [ "$LEADS_STATUS" = "missing" ]; then
-            echo "leads table missing — running 005_leads.sql"
-            run_sql "005_leads" "$(cat supabase/migrations/005_leads.sql)"
-          else
-            echo "leads table already exists — skipping 005_leads.sql"
-          fi
-
-          echo ""
-          echo "=== Post-migration table check ==="
-          for t in clients pools shipments orders providers leads; do
-            STATUS=$(check_table "$t")
-            MARK=$([ "$STATUS" = "exists" ] && echo "✅" || echo "❌")
-            echo "  $MARK $t: $STATUS"
-          done
-
-      - name: Save results
-        if: always()
-        run: |
-          echo "Migration run: $(date -u)" > migration-results.txt
-          echo "Done" >> migration-results.txt
-          git config user.email "ci@github.com"
-          git config user.name "CI Bot"
-          git add migration-results.txt
-          git diff --staged --quiet || git commit -m "ci: migration results [skip ci]"
-          git push origin main || true
+      - name: Run migrations
+        run: python3 .github/scripts/migrate.py
