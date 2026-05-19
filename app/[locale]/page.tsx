@@ -79,24 +79,24 @@ function PainPointSection() {
       <div className="container max-w-3xl">
         <div className="grid gap-4 sm:grid-cols-3 text-center">
           <div className="rounded-2xl bg-red-50 border border-red-100 p-5">
-            <p className="text-3xl font-extrabold text-red-600">$500</p>
-            <p className="text-sm text-red-700 font-medium mt-1">Precio promedio que pagas hoy</p>
-            <p className="text-xs text-slate-500 mt-1">(DDP Panamá, por m³)</p>
+            <p className="text-3xl font-extrabold text-red-600">$380–550</p>
+            <p className="text-sm text-red-700 font-medium mt-1">Lo que cobran los consolidadores</p>
+            <p className="text-xs text-slate-500 mt-1">(LCL bodega-a-bodega, por m³)</p>
           </div>
           <div className="rounded-2xl bg-amber-50 border border-amber-100 p-5 flex items-center justify-center">
             <div>
               <p className="text-4xl font-black text-amber-500">vs</p>
-              <p className="text-xs text-slate-500 mt-1">Lo que realmente cuesta</p>
+              <p className="text-xs text-slate-500 mt-1">Sin transparencia ni descuento por volumen</p>
             </div>
           </div>
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-5">
-            <p className="text-3xl font-extrabold text-emerald-600">$82–98</p>
-            <p className="text-sm text-emerald-700 font-medium mt-1">Tarifa base LCL en pool</p>
-            <p className="text-xs text-slate-500 mt-1">(flete consolidado, por m³)</p>
+            <p className="text-3xl font-extrabold text-emerald-600">$180–250</p>
+            <p className="text-sm text-emerald-700 font-medium mt-1">Tu precio en pool FINDIT</p>
+            <p className="text-xs text-slate-500 mt-1">(mismo servicio, precio justo, por m³)</p>
           </div>
         </div>
         <p className="text-center text-sm text-slate-500 mt-4">
-          La diferencia es el margen que se quedan los intermediarios. FINDIT te da acceso directo al precio de volumen.
+          LMA Global publica $285/m³. Con un pool lleno FINDIT llega a $180–250/m³ — mismo servicio, precio que baja según cuántos se sumen.
         </p>
       </div>
     </section>

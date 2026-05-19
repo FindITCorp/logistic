@@ -2,32 +2,52 @@
 
 import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
+import {
+  calculateClientPrice,
+  selectShippingMode,
+  FCL_BREAKEVEN_M3,
+  MIN_ENTRY_M3,
+  type ShippingMode,
+} from '@/lib/pricing'
 
-const CURRENT_MARKET_RATE = 500 // avg DDP rate importers pay today
+// LMA Global Logistics publishes $285/CBM (warehouse-to-warehouse, no customs)
+// Customs + delivery adds ~$150-300/CBM for small importers
+const COMPETITOR_LCL_RATE = 285   // LMA published all-in LCL rate
+const BROKER_DDP_RATE     = 500   // typical DDP broker rate (mid-range)
 
-function calcPoolPrice(volumeM3: number, dayJoined: number): number {
-  // Naviero cost per tier
-  let navieroCost: number
-  if (volumeM3 < 5) navieroCost = 100
-  else if (volumeM3 < 15) navieroCost = 90
-  else if (volumeM3 < 20) navieroCost = 85
-  else navieroCost = 80
+const MODE_LABEL: Record<ShippingMode, string> = {
+  LCL:    'LCL consolidado',
+  FCL_20: 'Contenedor 20ft',
+  FCL_40: 'Contenedor 40ft',
+}
 
-  const savings = 100 - navieroCost
-  const daysLeft = Math.max(1, 11 - dayJoined)
-  const clientPct = Math.max(10, daysLeft * 10)
-  return Math.round((100 - savings * (clientPct / 100)) * 10) / 10
+const MODE_ICON: Record<ShippingMode, string> = {
+  LCL:    '📦',
+  FCL_20: '🚢',
+  FCL_40: '🚢',
 }
 
 export default function SavingsCalculator() {
-  const [volume, setVolume] = useState(2)
-  const [day, setDay] = useState(3)
+  const [volume, setVolume]       = useState(2)
+  const [day, setDay]             = useState(3)
+  const [poolVolume, setPoolVol]  = useState(12) // current pool fill
+  const [compare, setCompare]     = useState<'lma' | 'broker'>('lma')
 
-  const currentCost = Math.round(volume * CURRENT_MARKET_RATE)
-  const poolPrice = calcPoolPrice(18, day) // assume pool at 18m³ when they join
-  const poolCost = Math.round(volume * poolPrice)
-  const savings = currentCost - poolCost
-  const savingsPct = Math.round((savings / currentCost) * 100)
+  const competitorRate = compare === 'lma' ? COMPETITOR_LCL_RATE : BROKER_DDP_RATE
+  const competitorLabel = compare === 'lma' ? 'LMA Global ($285/m³)' : 'Broker DDP ($500/m³)'
+
+  const result   = calculateClientPrice(day, poolVolume)
+  const mode     = selectShippingMode(poolVolume)
+  const poolPrice = Math.round(result.clientPrice)
+
+  const myCost        = Math.round(volume * poolPrice)
+  const competitorCost = Math.round(volume * competitorRate)
+  const savings       = competitorCost - myCost
+  const savingsPct    = Math.round((savings / competitorCost) * 100)
+
+  const switchToFCL = poolVolume < FCL_BREAKEVEN_M3
+    ? FCL_BREAKEVEN_M3 - poolVolume
+    : null
 
   return (
     <section className="bg-gradient-to-br from-brand-900 to-brand-700 py-20 text-white">
@@ -36,36 +56,59 @@ export default function SavingsCalculator() {
           <span className="inline-block rounded-full bg-white/10 border border-white/20 px-4 py-1.5 text-sm font-medium text-blue-200 mb-4">
             Calculadora de ahorro
           </span>
-          <h2 className="text-3xl font-bold">
-            ¿Cuánto ahorrarías tú?
-          </h2>
+          <h2 className="text-3xl font-bold">¿Cuánto ahorrarías tú?</h2>
           <p className="mt-3 text-blue-200 max-w-lg mx-auto">
-            Compara lo que pagas hoy vs. lo que pagarías en un pool FINDIT.
+            Compara lo que pagas hoy vs. tu precio en un pool FINDIT.
           </p>
         </div>
 
         <div className="rounded-2xl bg-white/10 border border-white/20 backdrop-blur-sm p-6 sm:p-8 space-y-6">
-          {/* Volume slider */}
+
+          {/* Comparar contra */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCompare('lma')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                compare === 'lma'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-white/5 text-blue-300 hover:bg-white/10'
+              }`}
+            >
+              vs LMA $285/m³
+            </button>
+            <button
+              onClick={() => setCompare('broker')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+                compare === 'broker'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-white/5 text-blue-300 hover:bg-white/10'
+              }`}
+            >
+              vs Broker DDP $500/m³
+            </button>
+          </div>
+
+          {/* Tu volumen */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium text-blue-100">Volumen de tu carga</label>
+              <label className="text-sm font-medium text-blue-100">Tu carga</label>
               <span className="text-lg font-bold text-white">{volume} m³</span>
             </div>
             <input
-              type="range" min="0.5" max="20" step="0.5"
+              type="range" min={MIN_ENTRY_M3} max="20" step="0.5"
               value={volume}
               onChange={(e) => setVolume(parseFloat(e.target.value))}
               className="w-full accent-emerald-400"
             />
             <div className="flex justify-between text-xs text-blue-300 mt-1">
-              <span>0.5 m³</span><span>5 m³</span><span>10 m³</span><span>20 m³</span>
+              <span>0.5 m³ mín.</span><span>5 m³</span><span>10 m³</span><span>20 m³</span>
             </div>
           </div>
 
-          {/* Day slider */}
+          {/* Día de entrada */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium text-blue-100">¿Qué día te unirías al pool?</label>
+              <label className="text-sm font-medium text-blue-100">¿Qué día te unirías?</label>
               <span className="text-lg font-bold text-white">Día {day}</span>
             </div>
             <input
@@ -75,23 +118,50 @@ export default function SavingsCalculator() {
               className="w-full accent-emerald-400"
             />
             <div className="flex justify-between text-xs text-blue-300 mt-1">
-              <span>Día 1<br/>más ahorro</span>
-              <span className="text-center">Día 5</span>
-              <span className="text-right">Día 10<br/>menos ahorro</span>
+              <span>Día 1 · más ahorro</span>
+              <span>Día 10 · menos</span>
             </div>
           </div>
 
-          {/* Results */}
+          {/* Volumen del pool actual */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm font-medium text-blue-100">Volumen del pool hoy</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">{MODE_ICON[mode]}</span>
+                <span className="text-sm font-semibold text-emerald-300">{MODE_LABEL[mode]}</span>
+                <span className="text-lg font-bold text-white">{poolVolume} m³</span>
+              </div>
+            </div>
+            <input
+              type="range" min="0" max="55" step="1"
+              value={poolVolume}
+              onChange={(e) => setPoolVol(parseInt(e.target.value))}
+              className="w-full accent-emerald-400"
+            />
+            <div className="flex justify-between text-xs text-blue-300 mt-1">
+              <span>0 m³</span>
+              <span className="text-amber-300">↑ FCL a {FCL_BREAKEVEN_M3} m³</span>
+              <span>55 m³</span>
+            </div>
+            {switchToFCL !== null && (
+              <p className="text-xs text-amber-300 mt-1 text-center">
+                Con {switchToFCL} m³ más el pool cambia a contenedor FCL y el precio baja más
+              </p>
+            )}
+          </div>
+
+          {/* Resultados */}
           <div className="grid gap-4 sm:grid-cols-3 mt-2">
             <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-center">
-              <p className="text-xs text-blue-300 mb-1">Pagas hoy (DDP)</p>
-              <p className="text-2xl font-extrabold text-red-300">${currentCost.toLocaleString()}</p>
-              <p className="text-xs text-blue-400">≈${CURRENT_MARKET_RATE}/m³</p>
+              <p className="text-xs text-blue-300 mb-1">{competitorLabel}</p>
+              <p className="text-2xl font-extrabold text-red-300">${competitorCost.toLocaleString()}</p>
+              <p className="text-xs text-blue-400">${competitorRate}/m³</p>
             </div>
             <div className="rounded-xl bg-white/5 border border-white/10 p-4 text-center">
-              <p className="text-xs text-blue-300 mb-1">Con FINDIT</p>
-              <p className="text-2xl font-extrabold text-emerald-300">${poolCost.toLocaleString()}</p>
-              <p className="text-xs text-blue-400">≈${poolPrice}/m³ flete</p>
+              <p className="text-xs text-blue-300 mb-1">Con FINDIT · {MODE_LABEL[mode]}</p>
+              <p className="text-2xl font-extrabold text-emerald-300">${myCost.toLocaleString()}</p>
+              <p className="text-xs text-blue-400">${poolPrice}/m³ flete</p>
             </div>
             <div className="rounded-xl bg-emerald-500/20 border border-emerald-400/40 p-4 text-center">
               <p className="text-xs text-emerald-300 mb-1">Tu ahorro</p>
@@ -101,8 +171,8 @@ export default function SavingsCalculator() {
           </div>
 
           <p className="text-xs text-blue-400 text-center">
-            * Cálculo basado en flete LCL base. Tarifa actual de mercado DDP estimada en $500/m³.
-            El precio final incluye todos los cargos de FINDIT.
+            * Flete base LCL. Aduanas, impuestos y entrega final van por separado.
+            LMA Global publica $285/m³ bodega-a-bodega (sin aduanas). El ahorro real depende del pool.
           </p>
 
           <a

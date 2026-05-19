@@ -1,9 +1,45 @@
 export const POOL_DURATION_DAYS = 10;
 
-// Default reference price (max the client ever pays) — overridable per pool
-export const DEFAULT_REFERENCE_PRICE = 100;
+// Default reference price (max the client ever pays) — matches LMA competitor's $285 all-in
+// We use $285 as ceiling: if we can't beat that, we don't charge more
+export const DEFAULT_REFERENCE_PRICE = 285;
 
-// Fallback static tiers — used when no provider is configured
+// ─── Shipping mode selection ──────────────────────────────────────────────────
+
+// 20ft container: ~25 CBM usable, mid-market ocean rate $2,000
+// 40ft container: ~55 CBM usable, mid-market ocean rate $3,200
+export const FCL_20FT_COST = 2000;   // USD ocean freight only
+export const FCL_20FT_CAPACITY = 25; // CBM usable
+export const FCL_40FT_COST = 3200;
+export const FCL_40FT_CAPACITY = 55;
+
+// LCL becomes uncompetitive vs FCL above this threshold
+export const FCL_BREAKEVEN_M3 = 20; // conservative: 20 CBM → 20ft FCL at $100/m³ = $2,000
+
+// Minimum volume per client entry (below this, forwarder charges 1 CBM minimum anyway)
+export const MIN_ENTRY_M3 = 0.5;
+
+export type ShippingMode = 'LCL' | 'FCL_20' | 'FCL_40';
+
+export function selectShippingMode(poolVolumeM3: number): ShippingMode {
+  if (poolVolumeM3 >= FCL_40FT_CAPACITY * 0.75) return 'FCL_40';
+  if (poolVolumeM3 >= FCL_BREAKEVEN_M3) return 'FCL_20';
+  return 'LCL';
+}
+
+/** Carrier cost per m³ for the optimal shipping mode at a given pool volume */
+export function getCarrierCostByMode(poolVolumeM3: number): { mode: ShippingMode; costPerM3: number } {
+  const mode = selectShippingMode(poolVolumeM3);
+  if (mode === 'FCL_40') return { mode, costPerM3: FCL_40FT_COST / Math.max(poolVolumeM3, 1) };
+  if (mode === 'FCL_20') return { mode, costPerM3: FCL_20FT_COST / Math.max(poolVolumeM3, 1) };
+  // LCL: use volume tiers
+  return { mode: 'LCL', costPerM3: getCarrierRate(poolVolumeM3) };
+}
+
+// ─── LCL volume tiers (what the forwarder charges us) ────────────────────────
+// Based on real quotes: TJ-China Freight $30/CBM flat (confirmed Zoe)
+// Conservative model uses $85-100/CBM until we have 3+ forwarder quotes
+
 export interface VolumeTier {
   minM3: number;
   maxM3: number | null;
@@ -12,9 +48,9 @@ export interface VolumeTier {
 
 export const DEFAULT_VOLUME_TIERS: VolumeTier[] = [
   { minM3: 0,  maxM3: 5,    carrierRate: 100 },
-  { minM3: 5,  maxM3: 15,   carrierRate: 90  },
-  { minM3: 15, maxM3: 20,   carrierRate: 85  },
-  { minM3: 20, maxM3: null, carrierRate: 80  },
+  { minM3: 5,  maxM3: 15,   carrierRate: 92  },
+  { minM3: 15, maxM3: 20,   carrierRate: 87  },
+  { minM3: 20, maxM3: null, carrierRate: 82  }, // FCL territory starts here
 ];
 
 // Savings distribution % by day joined — linear -10%/day, floor 10%
@@ -31,10 +67,6 @@ export interface ProviderRate {
   rate_per_m3: number;
 }
 
-/**
- * Get the provider's cost for a given pool volume.
- * Falls back to the static default tiers when no provider rates are supplied.
- */
 export function getCarrierRate(
   volumeM3: number,
   providerRates?: ProviderRate[],
@@ -59,6 +91,7 @@ export function getSavingsPct(dayJoined: number): number {
 export interface ClientPriceResult {
   referencePrice: number;
   carrierRate: number;
+  mode: ShippingMode;
   distributableSavings: number;
   savingsPct: number;
   clientDiscount: number;
@@ -68,8 +101,8 @@ export interface ClientPriceResult {
 
 /**
  * Calculate the price a client pays when joining on `dayJoined`
- * with the pool at `currentVolumeM3`, using optional provider-specific rates
- * and an optional reference price override.
+ * with the pool at `currentVolumeM3`.
+ * Automatically selects LCL vs FCL based on pool volume.
  */
 export function calculateClientPrice(
   dayJoined: number,
@@ -77,8 +110,13 @@ export function calculateClientPrice(
   providerRates?: ProviderRate[],
   referencePrice: number = DEFAULT_REFERENCE_PRICE,
 ): ClientPriceResult {
-  const carrierRate = getCarrierRate(currentVolumeM3, providerRates);
-  const distributableSavings = referencePrice - carrierRate;
+  const { mode, costPerM3: carrierRateByMode } = getCarrierCostByMode(currentVolumeM3);
+  // When provider rates are supplied (LCL only), use them; otherwise use mode-based cost
+  const carrierRate = mode === 'LCL'
+    ? getCarrierRate(currentVolumeM3, providerRates)
+    : carrierRateByMode;
+
+  const distributableSavings = Math.max(0, referencePrice - carrierRate);
   const savingsPct = getSavingsPct(dayJoined);
   const clientDiscount = distributableSavings * (savingsPct / 100);
   const clientPrice = referencePrice - clientDiscount;
@@ -87,6 +125,7 @@ export function calculateClientPrice(
   return {
     referencePrice,
     carrierRate,
+    mode,
     distributableSavings,
     savingsPct,
     clientDiscount,
