@@ -1,16 +1,15 @@
--- FINDIT Logistic — Initial Schema
--- Run this in Supabase SQL Editor
+-- FINDIT Logistic — Initial Schema (idempotent)
 
-create type assignment_mode as enum ('auto', 'manual');
-create type notify_by as enum ('whatsapp', 'email', 'both');
-create type pool_status as enum ('active', 'closed', 'shipped');
-create type shipment_status as enum ('received', 'assigned', 'shipped');
-create type origin_city as enum ('shanghai', 'guangzhou', 'shenzhen');
+do $$ begin create type assignment_mode as enum ('auto', 'manual'); exception when duplicate_object then null; end $$;
+do $$ begin create type notify_by as enum ('whatsapp', 'email', 'both'); exception when duplicate_object then null; end $$;
+do $$ begin create type pool_status as enum ('active', 'closed', 'shipped'); exception when duplicate_object then null; end $$;
+do $$ begin create type shipment_status as enum ('received', 'assigned', 'shipped'); exception when duplicate_object then null; end $$;
+do $$ begin create type origin_city as enum ('shanghai', 'guangzhou', 'shenzhen'); exception when duplicate_object then null; end $$;
 
 -- Clients
-create table clients (
+create table if not exists clients (
   id               uuid primary key default gen_random_uuid(),
-  client_code      text unique not null,        -- FDT-XXXX
+  client_code      text unique not null,
   name             text not null,
   whatsapp         text,
   email            text,
@@ -20,7 +19,7 @@ create table clients (
 );
 
 -- Active pools
-create table pools (
+create table if not exists pools (
   id                  uuid primary key default gen_random_uuid(),
   origin_city         origin_city not null,
   destination         text not null default 'Colón, Panamá',
@@ -32,8 +31,8 @@ create table pools (
   created_at          timestamptz not null default now()
 );
 
--- Shipments (one per package arriving at warehouse)
-create table shipments (
+-- Shipments
+create table if not exists shipments (
   id           uuid primary key default gen_random_uuid(),
   client_id    uuid not null references clients(id),
   client_code  text not null,
@@ -49,7 +48,7 @@ create table shipments (
 );
 
 -- Pool membership ledger
-create table pool_members (
+create table if not exists pool_members (
   id           uuid primary key default gen_random_uuid(),
   pool_id      uuid not null references pools(id),
   shipment_id  uuid not null references shipments(id),
@@ -59,27 +58,28 @@ create table pool_members (
   joined_at    timestamptz not null default now()
 );
 
--- Seed demo pools
-insert into pools (origin_city, current_volume_m3, participants, day_number, carrier_rate) values
-  ('shanghai',   8.5,  6,  3,  90),
-  ('guangzhou',  2.1,  2,  1,  100),
-  ('shenzhen',  16.4, 11,  7,  85);
+-- Seed demo pools (only if empty)
+insert into pools (origin_city, current_volume_m3, participants, day_number, carrier_rate)
+select * from (values
+  ('shanghai'::origin_city,   8.5,  6,  3,  90::numeric),
+  ('guangzhou'::origin_city,  2.1,  2,  1,  100::numeric),
+  ('shenzhen'::origin_city,  16.4, 11,  7,  85::numeric)
+) as v(origin_city, current_volume_m3, participants, day_number, carrier_rate)
+where not exists (select 1 from pools);
 
--- Row Level Security — allow public reads on pools
+-- RLS
 alter table pools enable row level security;
-create policy "pools_public_read" on pools for select using (true);
+do $$ begin create policy "pools_public_read" on pools for select using (true); exception when duplicate_object then null; end $$;
 
--- Clients can only be inserted publicly (registration)
 alter table clients enable row level security;
-create policy "clients_insert" on clients for insert with check (true);
-create policy "clients_read_own" on clients for select using (true);
+do $$ begin create policy "clients_insert" on clients for insert with check (true); exception when duplicate_object then null; end $$;
+do $$ begin create policy "clients_read_own" on clients for select using (true); exception when duplicate_object then null; end $$;
 
--- Shipments — service role only for writes, public for own reads
 alter table shipments enable row level security;
-create policy "shipments_read" on shipments for select using (true);
-create policy "shipments_insert" on shipments for insert with check (true);
-create policy "shipments_update" on shipments for update using (true);
+do $$ begin create policy "shipments_read" on shipments for select using (true); exception when duplicate_object then null; end $$;
+do $$ begin create policy "shipments_insert" on shipments for insert with check (true); exception when duplicate_object then null; end $$;
+do $$ begin create policy "shipments_update" on shipments for update using (true); exception when duplicate_object then null; end $$;
 
 alter table pool_members enable row level security;
-create policy "pool_members_read" on pool_members for select using (true);
-create policy "pool_members_insert" on pool_members for insert with check (true);
+do $$ begin create policy "pool_members_read" on pool_members for select using (true); exception when duplicate_object then null; end $$;
+do $$ begin create policy "pool_members_insert" on pool_members for insert with check (true); exception when duplicate_object then null; end $$;
