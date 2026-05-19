@@ -1,2 +1,6 @@
 Migration run: Tue May 19 01:55:46 UTC 2026
 Done
+Verifying Supabase Management API access...
+ERROR: Cannot query database. HTTP 403: error code: 1010
+Ensure SUPABASE_ACCESS_TOKEN is a valid PAT that owns this project.
+---
