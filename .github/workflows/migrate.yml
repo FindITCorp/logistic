@@ -63,13 +63,19 @@ jobs:
 
           # First: check current restrictions
           echo "--- GET current restrictions ---"
-          curl -s \
+          GET_HTTP=$(curl -s -o /tmp/get_resp.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" || true
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          GET_BODY=$(cat /tmp/get_resp.txt)
+          echo "GET HTTP $GET_HTTP: $GET_BODY"
+          {
+            echo "## Supabase Network Restrictions Debug"
+            echo "GET HTTP: $GET_HTTP"
+            echo "GET Body: $GET_BODY"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           echo ""
           echo "--- PUT to open 0.0.0.0/0 ---"
-          # Try both camelCase and snake_case field names
           HTTP_CODE=$(curl -s -o /tmp/whitelist_resp.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -X PUT \
@@ -77,7 +83,11 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
           BODY=$(cat /tmp/whitelist_resp.txt)
-          echo "HTTP $HTTP_CODE: $BODY"
+          echo "PUT HTTP $HTTP_CODE: $BODY"
+          {
+            echo "PUT HTTP: $HTTP_CODE"
+            echo "PUT Body: $BODY"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "204" ]; then
             echo "Network restrictions updated to allow all IPs."
@@ -85,11 +95,10 @@ jobs:
             sleep 20
           else
             echo "ERROR: Failed to update network restrictions (HTTP $HTTP_CODE)"
-            echo "Body: $BODY"
             echo ""
-            echo "To fix manually, go to:"
+            echo "To fix manually:"
             echo "  https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
-            echo "  and add 0.0.0.0/0 to Allowed CIDRs"
+            echo "  Add 0.0.0.0/0 to Allowed CIDRs"
             exit 1
           fi
 
