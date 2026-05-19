@@ -3,108 +3,96 @@ name: Test Supabase Connections (Debug)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     name: Test All Connection Methods
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Runner info
         run: |
           RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
           echo "Runner IP: $RUNNER_IP"
           echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
 
-      - name: Test REST API (PostgREST) via hardcoded URL
+      - name: Test REST API (PostgREST)
         env:
           SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== Test 1a: PostgREST hardcoded URL ==="
-          SUPABASE_URL="https://fvefwnojcqbdkcmfngnu.supabase.co"
-          echo "URL: $SUPABASE_URL"
-          echo "Key prefix: ${SERVICE_ROLE_KEY:0:20}..."
-          STATUS=$(curl -s --max-time 15 -o /tmp/r1a.txt -w "%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/pools?limit=1" \
+          echo "Service role key prefix: ${SERVICE_ROLE_KEY:0:20}..."
+          STATUS=$(curl -s --max-time 15 -o /tmp/r1.txt -w "%{http_code}" \
+            "https://fvefwnojcqbdkcmfngnu.supabase.co/rest/v1/pools?limit=1" \
             -H "apikey: ${SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")
-          echo "HTTP: $STATUS"
-          echo "Body: $(cat /tmp/r1a.txt | head -c 500)"
+          echo "REST API HTTP: $STATUS"
+          echo "REST API Body: $(cat /tmp/r1.txt | head -c 500)"
 
-      - name: Test REST API via NEXT_PUBLIC_SUPABASE_URL secret
-        env:
-          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-        run: |
-          echo "=== Test 1b: REST API via secret URL ==="
-          echo "URL (first 30): ${SUPABASE_URL:0:30}"
-          if [ -z "$SUPABASE_URL" ]; then
-            echo "NEXT_PUBLIC_SUPABASE_URL secret is EMPTY"
-          else
-            STATUS=$(curl -s --max-time 15 -o /tmp/r1b.txt -w "%{http_code}" \
-              "${SUPABASE_URL}/rest/v1/pools?limit=1" \
-              -H "apikey: ${SERVICE_ROLE_KEY}" \
-              -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")
-            echo "HTTP: $STATUS"
-            echo "Body: $(cat /tmp/r1b.txt | head -c 500)"
-          fi
-
-      - name: Test Management API with PAT
+      - name: Test Management API GET restrictions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "=== Test 2: Management API with PAT ==="
-          echo "Token prefix: ${SUPABASE_ACCESS_TOKEN:0:15}"
-          echo "Token length: ${#SUPABASE_ACCESS_TOKEN}"
+          echo "PAT prefix: ${SUPABASE_ACCESS_TOKEN:0:15}"
+          echo "PAT length: ${#SUPABASE_ACCESS_TOKEN}"
           STATUS=$(curl -s --max-time 15 -o /tmp/r2.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
-          echo "HTTP: $STATUS"
-          echo "Body: $(cat /tmp/r2.txt | head -c 500)"
+          echo "Mgmt GET HTTP: $STATUS"
+          echo "Mgmt GET Body: $(cat /tmp/r2.txt | head -c 1000)"
 
-      - name: Test Management API — whitelist 0.0.0.0/0
+      - name: Test Management API PUT 0.0.0.0/0
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "=== Test 2b: PUT 0.0.0.0/0 to allowlist ==="
-          STATUS=$(curl -s --max-time 15 -o /tmp/r2b.txt -w "%{http_code}" \
+          STATUS=$(curl -s --max-time 15 -o /tmp/r3.txt -w "%{http_code}" \
             -X PUT \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
-          echo "HTTP: $STATUS"
-          echo "Body: $(cat /tmp/r2b.txt | head -c 500)"
+          echo "Mgmt PUT HTTP: $STATUS"
+          echo "Mgmt PUT Body: $(cat /tmp/r3.txt | head -c 1000)"
 
-      - name: Test DB TCP connectivity (netcat)
+      - name: Test TCP connectivity
         run: |
-          echo "=== Test 3: DB TCP ports ==="
           sudo apt-get install -y -qq netcat-openbsd 2>/dev/null
-          for HOST in "db.fvefwnojcqbdkcmfngnu.supabase.co" "aws-0-us-east-1.pooler.supabase.com"; do
+          for HOST in "db.fvefwnojcqbdkcmfngnu.supabase.co" "aws-0-us-east-1.pooler.supabase.com" "aws-0-us-west-1.pooler.supabase.com"; do
             for PORT in 5432 6543; do
               RESULT=$(timeout 8 nc -zv "$HOST" "$PORT" 2>&1 | tail -1)
-              echo "  ${HOST}:${PORT} → $RESULT"
+              echo "${HOST}:${PORT} → $RESULT"
             done
           done
 
-      - name: Write step summary
-        if: always()
+      - name: Commit results to repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Write all test results to a file
           {
-            echo "## Connection Test Results"
-            echo "**Runner IP:** $RUNNER_IP"
+            echo "# Connection Test Results"
+            echo "Date: $(date -u)"
+            echo "Runner IP: $RUNNER_IP"
             echo ""
-            echo "### Test 1a: REST API (hardcoded URL)"
-            echo "\`\`\`"
-            cat /tmp/r1a.txt 2>/dev/null | head -c 500 || echo "(no output)"
-            echo "\`\`\`"
+            echo "## REST API (PostgREST)"
+            cat /tmp/r1.txt 2>/dev/null | head -c 1000 || echo "(empty)"
             echo ""
-            echo "### Test 2: Management API GET restrictions"
-            echo "\`\`\`"
-            cat /tmp/r2.txt 2>/dev/null | head -c 500 || echo "(no output)"
-            echo "\`\`\`"
+            echo "## Management API GET"
+            cat /tmp/r2.txt 2>/dev/null | head -c 1000 || echo "(empty)"
             echo ""
-            echo "### Test 2b: Management API PUT 0.0.0.0/0"
-            echo "\`\`\`"
-            cat /tmp/r2b.txt 2>/dev/null | head -c 500 || echo "(no output)"
-            echo "\`\`\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "## Management API PUT 0.0.0.0/0"
+            cat /tmp/r3.txt 2>/dev/null | head -c 1000 || echo "(empty)"
+          } > /tmp/connection-test-results.txt
+
+          cat /tmp/connection-test-results.txt
+
+          # Commit to repo so we can read it
+          cp /tmp/connection-test-results.txt connection-test-results.txt
+          git config user.email "ci@github.com"
+          git config user.name "CI Bot"
+          git add connection-test-results.txt
+          git commit -m "ci: connection test results $(date -u +%Y%m%dT%H%M%SZ)" || true
+          git push || true
