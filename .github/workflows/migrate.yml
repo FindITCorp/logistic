@@ -1,0 +1,124 @@
+name: Run Supabase Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (print SQL without executing)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+
+permissions:
+  contents: read
+
+env:
+  DB_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.fvefwnojcqbdkcmfngnu.supabase.co:5432/postgres
+
+jobs:
+  migrate:
+    name: Apply SQL Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Verify DB connection
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          echo "Testing connection to Supabase..."
+          psql "$DB_URL" -c "SELECT current_database(), version();" \
+            && echo "Connection OK" \
+            || { echo "Connection FAILED"; exit 1; }
+
+      - name: Create migrations tracking table
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          psql "$DB_URL" <<'SQL'
+            CREATE TABLE IF NOT EXISTS _migrations (
+              id          serial PRIMARY KEY,
+              filename    text UNIQUE NOT NULL,
+              applied_at  timestamptz NOT NULL DEFAULT now(),
+              checksum    text
+            );
+          SQL
+          echo "Migrations tracking table ready."
+
+      - name: Run pending migrations
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+
+          MIGRATIONS_DIR="supabase/migrations"
+          SUCCESS=0
+          SKIPPED=0
+          FAILED=0
+
+          echo "=== FINDIT Logistic — Migration Runner ==="
+          echo "Dry run: $DRY_RUN"
+          echo ""
+
+          for FILE in $(ls "$MIGRATIONS_DIR"/*.sql | sort); do
+            BASENAME=$(basename "$FILE")
+            CHECKSUM=$(sha256sum "$FILE" | awk '{print $1}')
+
+            # Check if already applied
+            APPLIED=$(psql "$DB_URL" -tAc \
+              "SELECT COUNT(*) FROM _migrations WHERE filename = '$BASENAME';")
+
+            if [ "$APPLIED" -gt "0" ]; then
+              echo "  SKIP  $BASENAME (already applied)"
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            echo "  RUN   $BASENAME"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "--- DRY RUN: would execute ---"
+              cat "$FILE"
+              echo "------------------------------"
+              SUCCESS=$((SUCCESS + 1))
+            else
+              if psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$FILE"; then
+                # Record migration as applied
+                psql "$DB_URL" -c \
+                  "INSERT INTO _migrations (filename, checksum) VALUES ('$BASENAME', '$CHECKSUM') ON CONFLICT (filename) DO NOTHING;"
+                echo "  OK    $BASENAME"
+                SUCCESS=$((SUCCESS + 1))
+              else
+                echo "  FAIL  $BASENAME"
+                FAILED=$((FAILED + 1))
+              fi
+            fi
+          done
+
+          echo ""
+          echo "=== Migration Summary ==="
+          echo "  Applied : $SUCCESS"
+          echo "  Skipped : $SKIPPED"
+          echo "  Failed  : $FAILED"
+
+          if [ "$FAILED" -gt "0" ]; then
+            echo "ERROR: $FAILED migration(s) failed!"
+            exit 1
+          fi
+
+          echo "All migrations completed successfully."

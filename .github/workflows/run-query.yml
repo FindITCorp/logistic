@@ -1,0 +1,56 @@
+name: Run SQL Query (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sql:
+        description: 'SQL query to execute (single statement or block)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run — print SQL without executing'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: read
+
+env:
+  DB_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.fvefwnojcqbdkcmfngnu.supabase.co:5432/postgres
+
+jobs:
+  run-query:
+    name: Execute SQL Query
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install psql client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Print SQL to be executed
+        run: |
+          echo "=== SQL Query ==="
+          echo "${{ github.event.inputs.sql }}"
+          echo "================="
+          echo "Dry run: ${{ github.event.inputs.dry_run }}"
+
+      - name: Execute SQL query
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SQL_QUERY: ${{ github.event.inputs.sql }}
+        run: |
+          echo "Executing query..."
+          echo "$SQL_QUERY" | psql "$DB_URL" -v ON_ERROR_STOP=1
+          echo "Query completed successfully."
+
+      - name: Dry run complete
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "DRY RUN — no changes made to the database."
