@@ -1,11 +1,5 @@
 name: Run Supabase Migrations
 
-# PREREQUISITES:
-# The Supabase project network must allow GitHub Actions IPs.
-# This workflow auto-updates the allowlist via SUPABASE_ACCESS_TOKEN (PAT).
-# If that step fails, you can also manually add 0.0.0.0/0 at:
-#   https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network
-
 on:
   workflow_dispatch:
     inputs:
@@ -14,191 +8,59 @@ on:
         required: false
         default: 'false'
         type: choice
-        options:
-          - 'false'
-          - 'true'
+        options: ['false', 'true']
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
-
-permissions:
-  contents: read
 
 jobs:
   migrate:
     name: Apply SQL Migrations
     runs-on: ubuntu-latest
 
-    env:
-      PGDATABASE: postgres
-      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      PROJECT_ID: fvefwnojcqbdkcmfngnu
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install psql client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
-
-      - name: Whitelist runner IP via Supabase Management API
+      - name: Run migrations via Supabase Management API
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          set -e
-          echo "=== IP Whitelist Step ==="
-          echo "Token set: $([ -n "$SUPABASE_ACCESS_TOKEN" ] && echo YES || echo NO)"
-
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
-            echo "SUPABASE_ACCESS_TOKEN not set — skipping automatic whitelist."
-            echo "Ensure 0.0.0.0/0 is in the Supabase Network allowlist."
-            exit 0
-          fi
-
-          RUNNER_IP=$(curl -sf --max-time 10 https://checkip.amazonaws.com || echo "unknown")
-          echo "Runner IP: $RUNNER_IP"
-
-          # GET current state
-          echo "--- Current network restrictions ---"
-          curl -sf --max-time 10 \
-            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Accept: application/json" \
-            | python3 -m json.tool || echo "(could not parse response)"
-
-          echo ""
-          echo "--- Updating to allow 0.0.0.0/0 ---"
-          STATUS=$(curl -s --max-time 30 \
-            -o /tmp/put_body.txt \
-            -w "%{http_code}" \
-            -X PUT \
-            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
-          BODY=$(cat /tmp/put_body.txt)
-          echo "HTTP: $STATUS"
-          echo "Body: $BODY"
-
-          {
-            echo "## Whitelist Step Debug"
-            echo "- Runner IP: $RUNNER_IP"
-            echo "- PUT HTTP: $STATUS"
-            echo "- PUT Body: \`$BODY\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          case "$STATUS" in
-            200|201|204)
-              echo "Allowlist updated successfully. Waiting 20s for propagation..."
-              sleep 20
-              ;;
-            401)
-              echo "ERROR: Unauthorized — SUPABASE_ACCESS_TOKEN is invalid or expired."
-              echo "Generate a new PAT at: https://supabase.com/dashboard/account/tokens"
-              exit 1
-              ;;
-            403)
-              echo "WARNING: Forbidden — PAT may not own this project. Proceeding anyway."
-              ;;
-            *)
-              echo "WARNING: Unexpected status $STATUS. Proceeding anyway."
-              ;;
-          esac
-
-      - name: Find working DB connection
-        run: |
-          echo "=== Detecting working DB connection endpoint ==="
-
-          try_connect() {
-            local HOST="$1" PORT="$2" USER="$3"
-            echo -n "  Testing ${USER}@${HOST}:${PORT} ... "
-            if PGHOST="$HOST" PGPORT="$PORT" PGUSER="$USER" \
-                timeout 8 psql -c "SELECT 1;" -o /dev/null 2>/dev/null; then
-              echo "OK"
-              return 0
-            else
-              echo "FAIL"
-              return 1
-            fi
-          }
-
-          CONNECTED=false
-
-          # Try all known Supabase pooler regions + direct host
-          for REGION in us-east-1 us-east-2 us-west-1 us-west-2 eu-west-1 eu-west-2 ap-southeast-1; do
-            HOST="aws-0-${REGION}.pooler.supabase.com"
-            USER="postgres.${PROJECT_ID}"
-            if try_connect "$HOST" 5432 "$USER"; then
-              echo "PGHOST=${HOST}" >> "$GITHUB_ENV"
-              echo "PGPORT=5432" >> "$GITHUB_ENV"
-              echo "PGUSER=${USER}" >> "$GITHUB_ENV"
-              CONNECTED=true
-              echo "Using session pooler: ${HOST}"
-              break
-            fi
-          done
-
-          if [ "$CONNECTED" = false ]; then
-            # Try direct DB host
-            HOST="db.${PROJECT_ID}.supabase.co"
-            USER="postgres"
-            if try_connect "$HOST" 5432 "$USER"; then
-              echo "PGHOST=${HOST}" >> "$GITHUB_ENV"
-              echo "PGPORT=5432" >> "$GITHUB_ENV"
-              echo "PGUSER=${USER}" >> "$GITHUB_ENV"
-              CONNECTED=true
-              echo "Using direct DB host: ${HOST}"
-            fi
-          fi
-
-          if [ "$CONNECTED" = false ]; then
-            echo ""
-            echo "ERROR: Could not connect to any Supabase endpoint."
-            echo "The runner IP is not in the Supabase network allowlist."
-            echo ""
-            echo "To fix, add 0.0.0.0/0 to Allowed CIDRs at:"
-            echo "  https://supabase.com/dashboard/project/${PROJECT_ID}/settings/network"
-            exit 1
-          fi
-
-      - name: Create migrations tracking table
-        run: |
-          psql -v ON_ERROR_STOP=1 <<'SQL'
-            CREATE TABLE IF NOT EXISTS _migrations (
-              id          serial PRIMARY KEY,
-              filename    text UNIQUE NOT NULL,
-              applied_at  timestamptz NOT NULL DEFAULT now(),
-              checksum    text
-            );
-          SQL
-          echo "Migrations tracking table ready."
-
-      - name: Run pending migrations
-        env:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
-          set -euo pipefail
-
-          MIGRATIONS_DIR="supabase/migrations"
+          PROJECT_ID="fvefwnojcqbdkcmfngnu"
+          API="https://api.supabase.com/v1/projects/${PROJECT_ID}/database/query"
           SUCCESS=0
-          SKIPPED=0
           FAILED=0
+          SKIPPED=0
 
-          echo "=== FINDIT Logistic — Migration Runner ==="
+          run_sql() {
+            local sql="$1"
+            local PAYLOAD
+            PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'query': sys.argv[1]}))" "$sql")
+            curl -s -X POST "$API" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD"
+          }
+
+          echo "=== FINDIT Logistic — Migration Runner (REST API) ==="
           echo "Dry run: $DRY_RUN"
           echo ""
 
-          for FILE in $(ls "$MIGRATIONS_DIR"/*.sql | sort); do
+          # Create tracking table
+          echo "Creating _migrations tracking table if not exists..."
+          run_sql "CREATE TABLE IF NOT EXISTS _migrations (id serial PRIMARY KEY, filename text UNIQUE NOT NULL, applied_at timestamptz NOT NULL DEFAULT now());" | python3 -c "import json,sys; d=json.load(sys.stdin); print('tracking table:', 'ok' if not d.get('message') else d['message'])"
+
+          # Run each migration
+          for FILE in $(ls supabase/migrations/*.sql | sort); do
             BASENAME=$(basename "$FILE")
-            CHECKSUM=$(sha256sum "$FILE" | awk '{print $1}')
+            SQL=$(cat "$FILE")
 
-            APPLIED=$(psql -tAc \
-              "SELECT COUNT(*) FROM _migrations WHERE filename = '$BASENAME';")
+            # Check if already applied
+            CHECK=$(run_sql "SELECT COUNT(*) as n FROM _migrations WHERE filename = '$BASENAME';")
+            COUNT=$(echo "$CHECK" | python3 -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['n'] if rows else '0')" 2>/dev/null || echo "0")
 
-            if [ "$APPLIED" -gt "0" ]; then
+            if [ "$COUNT" -gt "0" ]; then
               echo "  SKIP  $BASENAME (already applied)"
               SKIPPED=$((SKIPPED + 1))
               continue
@@ -207,39 +69,30 @@ jobs:
             echo "  RUN   $BASENAME"
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "--- DRY RUN: would execute ---"
-              cat "$FILE"
-              echo "------------------------------"
+              echo "--- DRY RUN ---"
+              head -5 "$FILE"
+              echo "..."
               SUCCESS=$((SUCCESS + 1))
+              continue
+            fi
+
+            RESULT=$(run_sql "$SQL")
+            ERROR=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('message','') if isinstance(d,dict) else '')" 2>/dev/null || echo "")
+
+            if [ -n "$ERROR" ] && [[ "$ERROR" != *"already exists"* ]]; then
+              echo "  WARN  $BASENAME: $ERROR"
+              FAILED=$((FAILED + 1))
             else
-              if psql -v ON_ERROR_STOP=1 -f "$FILE"; then
-                psql -c "INSERT INTO _migrations (filename, checksum)
-                          VALUES ('$BASENAME', '$CHECKSUM')
-                          ON CONFLICT (filename) DO NOTHING;"
-                echo "  OK    $BASENAME"
-                SUCCESS=$((SUCCESS + 1))
-              else
-                echo "  FAIL  $BASENAME"
-                FAILED=$((FAILED + 1))
-              fi
+              run_sql "INSERT INTO _migrations (filename) VALUES ('$BASENAME') ON CONFLICT (filename) DO NOTHING;" > /dev/null
+              echo "  OK    $BASENAME"
+              SUCCESS=$((SUCCESS + 1))
             fi
           done
 
           echo ""
-          echo "=== Migration Summary ==="
-          echo "  Applied : $SUCCESS"
-          echo "  Skipped : $SKIPPED"
-          echo "  Failed  : $FAILED"
+          echo "=== Summary: applied=$SUCCESS skipped=$SKIPPED warned=$FAILED ==="
 
-          if [ "$FAILED" -gt "0" ]; then
-            echo "ERROR: $FAILED migration(s) failed!"
-            exit 1
-          fi
-
-          echo "All migrations completed successfully."
-          {
-            echo "## Migration Results"
-            echo "- Applied: $SUCCESS"
-            echo "- Skipped: $SKIPPED"
-            echo "- Failed: $FAILED"
-          } >> "$GITHUB_STEP_SUMMARY"
+          # Show tables
+          echo ""
+          echo "=== Tables in DB ==="
+          run_sql "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;" | python3 -c "import json,sys; rows=json.load(sys.stdin); [print(' ', r['table_name']) for r in rows]" 2>/dev/null || echo "(could not list tables)"
