@@ -44,8 +44,17 @@ jobs:
           echo "Python: $(python3 --version)"
           echo "CWD: $(pwd)"
           echo "Script exists: $(test -f .github/scripts/migrate.py && echo YES || echo NO)"
-          ls -la .github/scripts/ || echo "scripts dir not found"
+          ls -la .github/scripts/ 2>&1 || echo "scripts dir not found"
           echo "SUPABASE_ACCESS_TOKEN set: $(test -n "$SUPABASE_ACCESS_TOKEN" && echo YES || echo NO)"
           echo "SUPABASE_ACCESS_TOKEN length: ${#SUPABASE_ACCESS_TOKEN}"
           echo "=================="
-          python3 .github/scripts/migrate.py
+          python3 .github/scripts/migrate.py 2>&1 | tee /tmp/migrate_output.txt; EXIT=${PIPESTATUS[0]}
+          echo "Exit code: $EXIT"
+          cat /tmp/migrate_output.txt >> migration-results.txt
+          echo "---" >> migration-results.txt
+          git config user.email "ci@github.com"
+          git config user.name "CI Bot"
+          git add migration-results.txt
+          git diff --staged --quiet || git commit -m "ci: debug migration output [skip ci]"
+          git push origin main || true
+          exit $EXIT
