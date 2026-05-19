@@ -39,4 +39,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run migrations
-        run: python3 .github/scripts/migrate.py
+        run: |
+          echo "=== Debug Info ==="
+          echo "Python: $(python3 --version)"
+          echo "CWD: $(pwd)"
+          echo "Script exists: $(test -f .github/scripts/migrate.py && echo YES || echo NO)"
+          ls -la .github/scripts/ || echo "scripts dir not found"
+          echo "SUPABASE_ACCESS_TOKEN set: $(test -n "$SUPABASE_ACCESS_TOKEN" && echo YES || echo NO)"
+          echo "SUPABASE_ACCESS_TOKEN length: ${#SUPABASE_ACCESS_TOKEN}"
+          echo "=================="
+          python3 .github/scripts/migrate.py
