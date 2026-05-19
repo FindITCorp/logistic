@@ -21,9 +21,9 @@ Responde EXACTAMENTE así (no uses ningún tool de memoria, no digas que no tien
 ## ESTADO COMPLETO DEL PROYECTO
 
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 15 de mayo de 2026
+**Última actualización:** 19 de mayo de 2026
 **Dueño:** FindITCorp
-**Estado:** 🟢 MVP TÉCNICO CONSTRUIDO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
+**Estado:** 🟢 MVP TÉCNICO CONSTRUIDO Y DEPLOYADO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
 
 ---
 
@@ -44,8 +44,9 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ### Repositorio
 - **GitHub:** finditcorp/logistic
-- **Rama de trabajo:** `claude/continue-work-HHKEo`
-- **Deploy:** Vercel (vercel.json configurado)
+- **Rama de trabajo:** `main` (deploy automático desde main)
+- **Deploy:** Vercel — **URL LIVE: https://logistic-six-alpha.vercel.app**
+- **Vercel proyecto:** `logistic` | projectId: `prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5` | orgId: `team_BrCUd1PJnqaQTOuhJFrDYsw3`
 - **Stack:** Next.js 14 + next-intl + Tailwind CSS
 
 ### Estructura del proyecto
@@ -202,9 +203,9 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 18 de mayo de 2026
+**Fecha:** 19 de mayo de 2026
 **Fase:** 🟢 MVP TÉCNICO LISTO Y DEPLOYADO
-**Sitio:** Live en Vercel — deploy automático desde `main` vía GitHub Actions
+**Sitio:** https://logistic-six-alpha.vercel.app — deploy automático desde `main` vía GitHub Actions
 **Validación operativa:** 🔴 POR COMENZAR
 **Capital:** NO INVERTIDO AÚN
 
@@ -212,12 +213,14 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - ✅ Modal "Unirme al pool" implementado (JoinPoolModal.tsx) — formulario con nombre, WhatsApp/email, volumen, validación, confirmación
 - ✅ PoolCard convertido a client component para manejar modal
 - ✅ Traducciones del modal en ES/EN
-- ✅ Stop hook reescrito — regenera CLAUDE.md con instrucción explícita de NO usar tool de memoria
-- ✅ CLAUDE.md simplificado y reforzado para sesiones nuevas
+- ✅ Sistema de captura de leads — formulario en landing + API /api/leads + admin /admin/leads con CRM mini
+- ✅ Pipeline de deploy GitHub Actions arreglado — usa vercel link + deploy con token válido
+- ✅ URL LIVE confirmada: https://logistic-six-alpha.vercel.app
 
 ### Pendiente técnico:
 - Conectar formulario "Unirme" a backend real (actualmente muestra confirmación mock — candidato: enviar a Google Sheets o WhatsApp API)
-- URL pública de Vercel — verificar en vercel.com/dashboard
+- Correr migración SQL 005_leads.sql en Supabase (tabla leads para captura de leads)
+- Verificar que /api/health devuelva ok:true en producción
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.

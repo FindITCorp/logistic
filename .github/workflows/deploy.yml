@@ -16,41 +16,28 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Capture vercel output for debugging
+      - name: Deploy to Vercel
+        id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          echo "CLI version: $(vercel --version 2>&1)"
-          echo "=== vercel link ===" > /tmp/debug.txt
-          vercel link --yes --token=$VERCEL_TOKEN >> /tmp/debug.txt 2>&1 || echo "link exit: $?" >> /tmp/debug.txt
-          echo "=== project.json ===" >> /tmp/debug.txt
-          cat .vercel/project.json >> /tmp/debug.txt 2>&1 || echo "(none)" >> /tmp/debug.txt
-          echo "=== vercel deploy ===" >> /tmp/debug.txt
-          vercel deploy --prod --yes --token=$VERCEL_TOKEN >> /tmp/debug.txt 2>&1 || echo "deploy exit: $?" >> /tmp/debug.txt
-          echo "=== all urls ===" >> /tmp/debug.txt
-          grep -oE "https://[a-zA-Z0-9._-]+" /tmp/debug.txt >> /tmp/debug.txt 2>&1 || echo "(none)" >> /tmp/debug.txt
-          cat /tmp/debug.txt
+          vercel link --yes --token=$VERCEL_TOKEN 2>&1 || true
+          DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
+          echo "$DEPLOY_OUT"
+          URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | grep -v "vercel\.app/docs" | tail -1)
+          echo "=== URL: $URL ==="
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
-      - name: Commit debug output
-        run: |
-          mkdir -p .debug
-          cp /tmp/debug.txt .debug/vercel_deploy.txt
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-          git add .debug/vercel_deploy.txt
-          git diff --staged --quiet || git commit -m "debug: vercel deploy output [skip ci]"
-          git push origin main || true
-
-      - name: Post result as commit comment
+      - name: Post URL as commit comment
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          URL=$(grep -oE "https://[a-zA-Z0-9._-]+" /tmp/debug.txt | grep "vercel\.app" | tail -1 || echo "")
+          URL="${{ steps.deploy.outputs.url }}"
           if [ -n "$URL" ]; then
             MSG="Deployed!\n\n$URL"
           else
-            MSG="Deploy ran — check .debug/vercel_deploy.txt in repo"
+            MSG="Deploy ran — check Actions logs"
           fi
           curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
