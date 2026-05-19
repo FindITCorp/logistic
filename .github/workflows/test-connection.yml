@@ -9,46 +9,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test REST API (PostgREST)
+      - name: Runner info
+        run: |
+          RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
+          echo "Runner IP: $RUNNER_IP"
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+
+      - name: Test REST API (PostgREST) via hardcoded URL
         env:
           SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
         run: |
-          echo "=== Test 1: PostgREST REST API ==="
+          echo "=== Test 1a: PostgREST hardcoded URL ==="
+          SUPABASE_URL="https://fvefwnojcqbdkcmfngnu.supabase.co"
           echo "URL: $SUPABASE_URL"
-          STATUS=$(curl -s -o /tmp/r1.txt -w "%{http_code}" \
+          echo "Key prefix: ${SERVICE_ROLE_KEY:0:20}..."
+          STATUS=$(curl -s --max-time 15 -o /tmp/r1a.txt -w "%{http_code}" \
             "${SUPABASE_URL}/rest/v1/pools?limit=1" \
             -H "apikey: ${SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")
           echo "HTTP: $STATUS"
-          echo "Body: $(cat /tmp/r1.txt | head -c 300)"
-          echo ""
+          echo "Body: $(cat /tmp/r1a.txt | head -c 500)"
+
+      - name: Test REST API via NEXT_PUBLIC_SUPABASE_URL secret
+        env:
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+        run: |
+          echo "=== Test 1b: REST API via secret URL ==="
+          echo "URL (first 30): ${SUPABASE_URL:0:30}"
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "NEXT_PUBLIC_SUPABASE_URL secret is EMPTY"
+          else
+            STATUS=$(curl -s --max-time 15 -o /tmp/r1b.txt -w "%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/pools?limit=1" \
+              -H "apikey: ${SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")
+            echo "HTTP: $STATUS"
+            echo "Body: $(cat /tmp/r1b.txt | head -c 500)"
+          fi
 
       - name: Test Management API with PAT
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           echo "=== Test 2: Management API with PAT ==="
-          echo "Token prefix: ${SUPABASE_ACCESS_TOKEN:0:10}"
-          STATUS=$(curl -s -o /tmp/r2.txt -w "%{http_code}" \
+          echo "Token prefix: ${SUPABASE_ACCESS_TOKEN:0:15}"
+          echo "Token length: ${#SUPABASE_ACCESS_TOKEN}"
+          STATUS=$(curl -s --max-time 15 -o /tmp/r2.txt -w "%{http_code}" \
             "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
           echo "HTTP: $STATUS"
-          echo "Body: $(cat /tmp/r2.txt | head -c 300)"
-          echo ""
+          echo "Body: $(cat /tmp/r2.txt | head -c 500)"
 
-      - name: Test DB TCP connectivity
+      - name: Test Management API — whitelist 0.0.0.0/0
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "=== Test 2b: PUT 0.0.0.0/0 to allowlist ==="
+          STATUS=$(curl -s --max-time 15 -o /tmp/r2b.txt -w "%{http_code}" \
+            -X PUT \
+            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
+          echo "HTTP: $STATUS"
+          echo "Body: $(cat /tmp/r2b.txt | head -c 500)"
+
+      - name: Test DB TCP connectivity (netcat)
         run: |
           echo "=== Test 3: DB TCP ports ==="
-          RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
-          echo "Runner IP: $RUNNER_IP"
-          for HOST in "db.fvefwnojcqbdkcmfngnu.supabase.co" "aws-0-us-east-1.pooler.supabase.com" "aws-0-us-west-1.pooler.supabase.com"; do
+          sudo apt-get install -y -qq netcat-openbsd 2>/dev/null
+          for HOST in "db.fvefwnojcqbdkcmfngnu.supabase.co" "aws-0-us-east-1.pooler.supabase.com"; do
             for PORT in 5432 6543; do
-              if timeout 5 bash -c "echo > /dev/tcp/${HOST}/${PORT}" 2>/dev/null; then
-                echo "TCP OK: ${HOST}:${PORT}"
-              else
-                echo "TCP FAIL: ${HOST}:${PORT}"
-              fi
+              RESULT=$(timeout 8 nc -zv "$HOST" "$PORT" 2>&1 | tail -1)
+              echo "  ${HOST}:${PORT} → $RESULT"
             done
           done
 
@@ -57,15 +91,20 @@ jobs:
         run: |
           {
             echo "## Connection Test Results"
-            echo "Runner IP: $(curl -s https://checkip.amazonaws.com)"
+            echo "**Runner IP:** $RUNNER_IP"
             echo ""
-            echo "### REST API (Test 1)"
+            echo "### Test 1a: REST API (hardcoded URL)"
             echo "\`\`\`"
-            cat /tmp/r1.txt 2>/dev/null | head -c 500 || echo "(no output)"
+            cat /tmp/r1a.txt 2>/dev/null | head -c 500 || echo "(no output)"
             echo "\`\`\`"
             echo ""
-            echo "### Management API (Test 2)"
+            echo "### Test 2: Management API GET restrictions"
             echo "\`\`\`"
             cat /tmp/r2.txt 2>/dev/null | head -c 500 || echo "(no output)"
+            echo "\`\`\`"
+            echo ""
+            echo "### Test 2b: Management API PUT 0.0.0.0/0"
+            echo "\`\`\`"
+            cat /tmp/r2b.txt 2>/dev/null | head -c 500 || echo "(no output)"
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
