@@ -75,18 +75,35 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - `/pools` o `/es/pools` → Pools activos en español
 - `/en/pools` → Pools activos en inglés
 
-### Motor de precios (lib/pricing.ts) — LÓGICA CONFIRMADA
-**Precio de referencia:** $100/m³ (techo máximo)
-**Duración del pool:** 10 días
-**Embarques:** cada 15 días
+### Inteligencia competitiva (verificada mayo 2026)
+| Competidor | Precio | Ruta | Notas |
+|---|---|---|---|
+| Casillero Guangzhou→Panamá (real, publicado) | **$420/m³** (≥1 CBM) · **$600/m³** (<1 CBM = $17/ft³) | GZH → Panamá | 45–55 días, salidas quincenales |
+| LMA Global Logistics | $285/m³ | Yiwu → Villa Zaita | 37 días, 2x/mes, warehouse-to-warehouse |
+| Broker DDP (promedio) | $500–800/m³ | China → Panamá DDP | incluye aduanas y entrega |
+| **FINDIT pool lleno** | **$180–250/m³** | GZH/SHA/SZH → Colón | precio baja según volumen |
 
-#### Tramos de volumen (costo del naviero)
-| Volumen pool | Costo naviero | Ahorro vs referencia |
-|---|---|---|
-| 0–5 m³ | $100 | $0 |
-| 5–15 m³ | $90 | $10 |
-| 15–20 m³ | $85 | $15 |
-| +20 m³ | $80 | $20 |
+**Ventaja vs. competidor principal:** 40–57% más barato que el casillero ($420), comparable a LMA ($285) con ventaja de precio dinámico
+
+### Motor de precios (lib/pricing.ts) — ACTUALIZADO
+**Precio de referencia:** $285/m³ (igual a LMA = ya somos competitivos en el peor caso)
+**Duración del pool:** 10 días · **Embarques:** cada 15 días
+**Mínimo por cliente:** 0.5 m³ (forwarder cobra 1 CBM mínimo de todas formas)
+
+#### Modo de envío automático (LCL → FCL)
+| Volumen pool | Modo | Costo/m³ aprox | Nota |
+|---|---|---|---|
+| 0–19 m³ | LCL consolidado | $82–100/m³ | tramos por volumen |
+| 20–40 m³ | FCL 20ft (~$2,000) | $80–100/m³ | más estable |
+| ≥41 m³ | FCL 40ft (~$3,200) | $58–78/m³ | precio óptimo |
+
+#### Tramos LCL (costo del naviero, LCL)
+| Volumen pool | Costo naviero |
+|---|---|
+| 0–5 m³ | $100 |
+| 5–15 m³ | $92 |
+| 15–20 m³ | $87 |
+| +20 m³ | $82 (o FCL) |
 
 #### Distribución del ahorro por día de entrada ✅ CONFIRMADO
 | Día entrada | Días restantes | % cliente | % FINDIT |

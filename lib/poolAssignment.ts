@@ -64,8 +64,7 @@ export async function findBestPool(
     const nextTier = tiers.find((t) => t.minM3 > pool.current_volume_m3)
     const gapToNextTier = nextTier ? nextTier.minM3 - pool.current_volume_m3 : Infinity
 
-    const referencePrice: number = pool.reference_price_m3 ?? 100
-    const { clientPrice } = calculateClientPrice(pool.day_number, volumeAfter, providerRates, referencePrice)
+    const { clientPrice } = calculateClientPrice(pool.day_number, volumeAfter, providerRates)
 
     const score = crossesTier
       ? 10000 - gapToNextTier
