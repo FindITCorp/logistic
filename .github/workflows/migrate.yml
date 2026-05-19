@@ -1,5 +1,16 @@
 name: Run Supabase Migrations
 
+# IMPORTANT: This workflow requires that GitHub Actions IP ranges are
+# allowed in your Supabase project's network settings:
+# https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network
+#
+# Option A (recommended): Add 0.0.0.0/0 to allowlist in Supabase dashboard
+#   (Settings > Network > Allowed CIDRs)
+#
+# Option B: Add a GitHub secret SUPABASE_ACCESS_TOKEN (personal access token
+#   from https://supabase.com/dashboard/account/tokens) to let this workflow
+#   dynamically whitelist the runner IP before connecting.
+
 on:
   workflow_dispatch:
     inputs:
@@ -33,17 +44,51 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
 
-      - name: Verify DB connection (pooler)
+      - name: Whitelist runner IP (requires SUPABASE_ACCESS_TOKEN secret)
+        # This step is SKIPPED if you haven't set SUPABASE_ACCESS_TOKEN.
+        # If skipped, make sure you have manually added GitHub Actions IPs
+        # or 0.0.0.0/0 to the Supabase network allowlist.
+        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
+          echo "Runner IP: $RUNNER_IP"
+          RESPONSE=$(curl -s -w "\nHTTP:%{http_code}" \
+            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
+            -X PUT \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"dbAllowedCidrs\": [\"${RUNNER_IP}/32\", \"0.0.0.0/0\"]}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1 | sed 's/HTTP://')
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "Warning: could not whitelist IP — proceeding anyway"
+          else
+            echo "IP $RUNNER_IP whitelisted. Waiting for network update..."
+            sleep 5
+          fi
+
+      - name: Verify DB connection
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          # Session pooler — NOT subject to the IP allowlist
-          # Format: postgresql://postgres.[project-id]:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
           DB_URL: postgresql://postgres.fvefwnojcqbdkcmfngnu:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres
         run: |
           echo "Testing connection via Supabase session pooler..."
           psql "$DB_URL" -c "SELECT current_database(), now();" \
             && echo "Connection OK" \
-            || { echo "Connection FAILED"; exit 1; }
+            || {
+              echo ""
+              echo "Connection FAILED — 'Host not in allowlist'"
+              echo ""
+              echo "To fix this, choose one of:"
+              echo "  1. Go to https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
+              echo "     and add 0.0.0.0/0 to Allowed CIDRs (simplest for CI/CD)"
+              echo "  2. Add a SUPABASE_ACCESS_TOKEN secret (personal access token) so"
+              echo "     this workflow can dynamically whitelist the runner IP."
+              exit 1
+            }
 
       - name: Create migrations tracking table
         env:
