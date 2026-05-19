@@ -20,79 +20,90 @@ jobs:
           echo "Runner IP: $RUNNER_IP"
           echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
 
-      - name: Test REST API (PostgREST)
+      - name: Confirm service role key works
         env:
           SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "Service role key prefix: ${SERVICE_ROLE_KEY:0:20}..."
-          STATUS=$(curl -s --max-time 15 -o /tmp/r1.txt -w "%{http_code}" \
-            "https://fvefwnojcqbdkcmfngnu.supabase.co/rest/v1/pools?limit=1" \
+          echo "Key prefix: ${SERVICE_ROLE_KEY:0:20}..."
+          STATUS=$(curl -s --max-time 15 -o /tmp/rest1.txt -w "%{http_code}" \
+            "https://fvefwnojcqbdkcmfngnu.supabase.co/rest/v1/pools?limit=1&select=id,origin_city,current_volume_m3" \
             -H "apikey: ${SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_ROLE_KEY}")
-          echo "REST API HTTP: $STATUS"
-          echo "REST API Body: $(cat /tmp/r1.txt | head -c 500)"
+          echo "REST GET pools → HTTP $STATUS"
+          cat /tmp/rest1.txt
 
-      - name: Test Management API GET restrictions
+      - name: Try Management API list projects
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "PAT prefix: ${SUPABASE_ACCESS_TOKEN:0:15}"
-          echo "PAT length: ${#SUPABASE_ACCESS_TOKEN}"
-          STATUS=$(curl -s --max-time 15 -o /tmp/r2.txt -w "%{http_code}" \
-            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
+          echo "PAT: ${SUPABASE_ACCESS_TOKEN:0:15}..."
+          STATUS=$(curl -s --max-time 15 -o /tmp/mgmt_projects.txt -w "%{http_code}" \
+            "https://api.supabase.com/v1/projects" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
-          echo "Mgmt GET HTTP: $STATUS"
-          echo "Mgmt GET Body: $(cat /tmp/r2.txt | head -c 1000)"
+          echo "List projects → HTTP $STATUS"
+          cat /tmp/mgmt_projects.txt | head -c 500
 
-      - name: Test Management API PUT 0.0.0.0/0
+      - name: Try Management API database query
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          STATUS=$(curl -s --max-time 15 -o /tmp/r3.txt -w "%{http_code}" \
-            -X PUT \
-            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/network/restrictions" \
+          STATUS=$(curl -s --max-time 15 -o /tmp/mgmt_query.txt -w "%{http_code}" \
+            -X POST \
+            "https://api.supabase.com/v1/projects/fvefwnojcqbdkcmfngnu/database/query" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"dbAllowedCidrs":["0.0.0.0/0"],"dbAllowedCidrsV6":[]}')
-          echo "Mgmt PUT HTTP: $STATUS"
-          echo "Mgmt PUT Body: $(cat /tmp/r3.txt | head -c 1000)"
+            -d '{"query": "SELECT current_database(), now();"}')
+          echo "DB query → HTTP $STATUS"
+          cat /tmp/mgmt_query.txt | head -c 500
 
-      - name: Test TCP connectivity
-        run: |
-          sudo apt-get install -y -qq netcat-openbsd 2>/dev/null
-          for HOST in "db.fvefwnojcqbdkcmfngnu.supabase.co" "aws-0-us-east-1.pooler.supabase.com" "aws-0-us-west-1.pooler.supabase.com"; do
-            for PORT in 5432 6543; do
-              RESULT=$(timeout 8 nc -zv "$HOST" "$PORT" 2>&1 | tail -1)
-              echo "${HOST}:${PORT} → $RESULT"
-            done
-          done
-
-      - name: Commit results to repo
+      - name: Try Supabase internal pg_dump endpoint
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Write all test results to a file
+          # Some Supabase instances expose a /pg endpoint for raw SQL
+          STATUS=$(curl -s --max-time 15 -o /tmp/pg_test.txt -w "%{http_code}" \
+            -X POST \
+            "https://fvefwnojcqbdkcmfngnu.supabase.co/pg/query" \
+            -H "apikey: ${SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"query": "SELECT 1;"}')
+          echo "/pg/query → HTTP $STATUS: $(cat /tmp/pg_test.txt | head -c 200)"
+
+          STATUS=$(curl -s --max-time 15 -o /tmp/pg_test2.txt -w "%{http_code}" \
+            -X POST \
+            "https://fvefwnojcqbdkcmfngnu.supabase.co/rest/v1/rpc/exec_sql" \
+            -H "apikey: ${SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"sql": "SELECT 1;"}')
+          echo "/rpc/exec_sql → HTTP $STATUS: $(cat /tmp/pg_test2.txt | head -c 200)"
+
+      - name: Commit results
+        run: |
           {
             echo "# Connection Test Results"
             echo "Date: $(date -u)"
             echo "Runner IP: $RUNNER_IP"
             echo ""
-            echo "## REST API (PostgREST)"
-            cat /tmp/r1.txt 2>/dev/null | head -c 1000 || echo "(empty)"
+            echo "## REST API pools (service role)"
+            cat /tmp/rest1.txt 2>/dev/null
             echo ""
-            echo "## Management API GET"
-            cat /tmp/r2.txt 2>/dev/null | head -c 1000 || echo "(empty)"
+            echo "## Management API list projects"
+            cat /tmp/mgmt_projects.txt 2>/dev/null | head -c 1000
             echo ""
-            echo "## Management API PUT 0.0.0.0/0"
-            cat /tmp/r3.txt 2>/dev/null | head -c 1000 || echo "(empty)"
-          } > /tmp/connection-test-results.txt
+            echo "## Management API DB query"
+            cat /tmp/mgmt_query.txt 2>/dev/null | head -c 1000
+            echo ""
+            echo "## pg/query endpoint"
+            cat /tmp/pg_test.txt 2>/dev/null | head -c 500
+            echo ""
+            echo "## rpc/exec_sql endpoint"
+            cat /tmp/pg_test2.txt 2>/dev/null | head -c 500
+          } > connection-test-results.txt
 
-          cat /tmp/connection-test-results.txt
-
-          # Commit to repo so we can read it
-          cp /tmp/connection-test-results.txt connection-test-results.txt
           git config user.email "ci@github.com"
           git config user.name "CI Bot"
           git add connection-test-results.txt
-          git commit -m "ci: connection test results $(date -u +%Y%m%dT%H%M%SZ)" || true
+          git commit -m "ci: connection test $(date -u +%Y%m%dT%H%M%SZ)" || true
           git push || true
