@@ -14,6 +14,9 @@ on:
     paths:
       - 'supabase/migrations/**'
 
+permissions:
+  contents: write
+
 jobs:
   migrate:
     name: Apply SQL Migrations
@@ -22,77 +25,73 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run migrations via Supabase Management API
+      - name: Run migrations via PostgREST + Management API
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
-          PROJECT_ID="fvefwnojcqbdkcmfngnu"
-          API="https://api.supabase.com/v1/projects/${PROJECT_ID}/database/query"
-          SUCCESS=0
-          FAILED=0
-          SKIPPED=0
+          PROJECT="fvefwnojcqbdkcmfngnu"
+          MGMT="https://api.supabase.com/v1/projects/${PROJECT}/database/query"
 
           run_sql() {
-            local sql="$1"
-            local PAYLOAD
+            local label="$1" sql="$2"
+            echo "  Running: $label"
             PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'query': sys.argv[1]}))" "$sql")
-            curl -s -X POST "$API" \
-              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            RESP=$(curl -s -X POST "$MGMT" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "$PAYLOAD"
+              -d "$PAYLOAD")
+            echo "  Response: $(echo $RESP | head -c 200)"
+            echo "$RESP"
           }
 
-          echo "=== FINDIT Logistic — Migration Runner (REST API) ==="
-          echo "Dry run: $DRY_RUN"
-          echo ""
+          check_table() {
+            local table="$1"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/${table}?limit=1" \
+              -H "apikey: $SERVICE_KEY" \
+              -H "Authorization: Bearer $SERVICE_KEY")
+            [ "$STATUS" = "200" ] && echo "exists" || echo "missing"
+          }
 
-          # Create tracking table
-          echo "Creating _migrations tracking table if not exists..."
-          run_sql "CREATE TABLE IF NOT EXISTS _migrations (id serial PRIMARY KEY, filename text UNIQUE NOT NULL, applied_at timestamptz NOT NULL DEFAULT now());" | python3 -c "import json,sys; d=json.load(sys.stdin); print('tracking table:', 'ok' if not d.get('message') else d['message'])"
-
-          # Run each migration
-          for FILE in $(ls supabase/migrations/*.sql | sort); do
-            BASENAME=$(basename "$FILE")
-            SQL=$(cat "$FILE")
-
-            # Check if already applied
-            CHECK=$(run_sql "SELECT COUNT(*) as n FROM _migrations WHERE filename = '$BASENAME';")
-            COUNT=$(echo "$CHECK" | python3 -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['n'] if rows else '0')" 2>/dev/null || echo "0")
-
-            if [ "$COUNT" -gt "0" ]; then
-              echo "  SKIP  $BASENAME (already applied)"
-              SKIPPED=$((SKIPPED + 1))
-              continue
-            fi
-
-            echo "  RUN   $BASENAME"
-
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "--- DRY RUN ---"
-              head -5 "$FILE"
-              echo "..."
-              SUCCESS=$((SUCCESS + 1))
-              continue
-            fi
-
-            RESULT=$(run_sql "$SQL")
-            ERROR=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('message','') if isinstance(d,dict) else '')" 2>/dev/null || echo "")
-
-            if [ -n "$ERROR" ] && [[ "$ERROR" != *"already exists"* ]]; then
-              echo "  WARN  $BASENAME: $ERROR"
-              FAILED=$((FAILED + 1))
-            else
-              run_sql "INSERT INTO _migrations (filename) VALUES ('$BASENAME') ON CONFLICT (filename) DO NOTHING;" > /dev/null
-              echo "  OK    $BASENAME"
-              SUCCESS=$((SUCCESS + 1))
-            fi
+          echo "=== Pre-migration table check ==="
+          for t in clients pools shipments orders providers leads; do
+            STATUS=$(check_table "$t")
+            echo "  $t: $STATUS"
           done
 
-          echo ""
-          echo "=== Summary: applied=$SUCCESS skipped=$SKIPPED warned=$FAILED ==="
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "DRY RUN — no changes executed."
+            exit 0
+          fi
 
-          # Show tables
           echo ""
-          echo "=== Tables in DB ==="
-          run_sql "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;" | python3 -c "import json,sys; rows=json.load(sys.stdin); [print(' ', r['table_name']) for r in rows]" 2>/dev/null || echo "(could not list tables)"
+          echo "=== Running migrations ==="
+          LEADS_STATUS=$(check_table "leads")
+          if [ "$LEADS_STATUS" = "missing" ]; then
+            echo "leads table missing — running 005_leads.sql"
+            run_sql "005_leads" "$(cat supabase/migrations/005_leads.sql)"
+          else
+            echo "leads table already exists — skipping 005_leads.sql"
+          fi
+
+          echo ""
+          echo "=== Post-migration table check ==="
+          for t in clients pools shipments orders providers leads; do
+            STATUS=$(check_table "$t")
+            MARK=$([ "$STATUS" = "exists" ] && echo "✅" || echo "❌")
+            echo "  $MARK $t: $STATUS"
+          done
+
+      - name: Save results
+        if: always()
+        run: |
+          echo "Migration run: $(date -u)" > migration-results.txt
+          echo "Done" >> migration-results.txt
+          git config user.email "ci@github.com"
+          git config user.name "CI Bot"
+          git add migration-results.txt
+          git diff --staged --quiet || git commit -m "ci: migration results [skip ci]"
+          git push origin main || true
