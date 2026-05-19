@@ -42,43 +42,17 @@ jobs:
 
       - name: Execute SQL
         if: ${{ github.event.inputs.dry_run == 'false' }}
-        run: |
-          python3 - << 'EOF'
-          import os, json, sys
-          from urllib import request, error
-
-          PROJECT_ID = os.environ["PROJECT_ID"]
-          MGMT_API = os.environ["MGMT_API"]
-          PAT = os.environ["SUPABASE_ACCESS_TOKEN"]
-          SQL = os.environ.get("SQL_QUERY", "")
-
-          if not SQL:
-              print("ERROR: SQL_QUERY is empty")
-              sys.exit(1)
-
-          payload = json.dumps({"query": SQL}).encode("utf-8")
-          req = request.Request(
-              f"{MGMT_API}/projects/{PROJECT_ID}/database/query",
-              data=payload,
-              method="POST",
-              headers={
-                  "Authorization": f"Bearer {PAT}",
-                  "Content-Type": "application/json",
-              },
-          )
-          try:
-              with request.urlopen(req, timeout=60) as resp:
-                  body = resp.read().decode("utf-8")
-                  result = json.loads(body)
-                  print("Result:")
-                  print(json.dumps(result, indent=2))
-          except error.HTTPError as e:
-              body = e.read().decode("utf-8")
-              print(f"ERROR HTTP {e.code}: {body}")
-              sys.exit(1)
-          EOF
         env:
           SQL_QUERY: ${{ github.event.inputs.sql }}
+        run: |
+          PAYLOAD=$(python3 -c "import json,os; print(json.dumps({'query': os.environ['SQL_QUERY']}))")
+          RESULT=$(curl -s --max-time 60 -X POST \
+            "${MGMT_API}/projects/${PROJECT_ID}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "Result:"
+          echo "$RESULT" | python3 -m json.tool 2>/dev/null || echo "$RESULT"
 
       - name: Dry run complete
         if: ${{ github.event.inputs.dry_run == 'true' }}

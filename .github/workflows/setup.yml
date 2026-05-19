@@ -41,6 +41,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_NOTIFY: ${{ secrets.GH_NOTIFY_TOKEN }}
           SITE_URL: "https://logistic-six-alpha.vercel.app"
         run: |
           PROJECT_ID="prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5"
@@ -48,7 +49,7 @@ jobs:
 
           set_env() {
             local key="$1" val="$2"
-            PAYLOAD=$(python3 -c "import json; print(json.dumps({'key':'$key','value':'$val','type':'encrypted','target':['production','preview']}))")
+            PAYLOAD=$(python3 -c "import json,sys; print(json.dumps({'key':sys.argv[1],'value':sys.argv[2],'type':'encrypted','target':['production','preview']}))" "$key" "$val")
             RESP=$(curl -s -X POST "https://api.vercel.com/v10/projects/$PROJECT_ID/env?teamId=$TEAM_ID" \
               -H "Authorization: Bearer $VERCEL_TOKEN" \
               -H "Content-Type: application/json" \
@@ -60,4 +61,5 @@ jobs:
           set_env "NEXT_PUBLIC_SUPABASE_ANON_KEY" "$SUPABASE_ANON"
           set_env "SUPABASE_SERVICE_ROLE_KEY"      "$SUPABASE_SERVICE"
           set_env "NEXT_PUBLIC_SITE_URL"           "$SITE_URL"
+          set_env "GITHUB_TOKEN_NOTIFY"            "$GH_NOTIFY"
           echo "Done."
