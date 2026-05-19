@@ -66,8 +66,19 @@ export const DEFAULT_VOLUME_TIERS: VolumeTier[] = [
   { minM3: 20, maxM3: null, carrierRate: 82  }, // FCL territory starts here
 ];
 
-// Savings distribution % by day joined — linear -10%/day, floor 10%
-export const DAY_SAVINGS_PCT: Record<number, number> = {
+// ─── Profitability floor ─────────────────────────────────────────────────────
+// FINDIT keeps a guaranteed minimum margin regardless of day joined.
+// Set at 30% over carrier: ensures $30/m³ min at $100 carrier.
+// Break-even at this floor: ~40-47 m³/month (3 pools × 13-15 m³).
+export const FINDIT_MARGIN_FLOOR_PCT = 0.30;
+
+// Max client price: 40% cheaper than the real competitor ($420 casillero).
+// = $252/m³. Client always saves at least 40% vs casillero.
+export const MAX_CLIENT_PRICE = Math.round(MARKET_RATE_CASILLERO * 0.60); // $252
+
+// % of distributable savings that goes TO THE CLIENT by day joined.
+// Day 1 = client gets 90% (early bird). Day 10 = client gets 10%.
+export const DAY_CLIENT_SAVINGS_PCT: Record<number, number> = {
   1: 90, 2: 80, 3: 70, 4: 60, 5: 50,
   6: 40, 7: 30, 8: 20, 9: 10, 10: 10,
 };
@@ -96,54 +107,68 @@ export function getCarrierRate(
   return match ? match.carrierRate : tiers[0].carrierRate;
 }
 
-export function getSavingsPct(dayJoined: number): number {
+export function getClientSavingsPct(dayJoined: number): number {
   const day = Math.max(1, Math.min(POOL_DURATION_DAYS, dayJoined));
-  return DAY_SAVINGS_PCT[day] ?? 20;
+  return DAY_CLIENT_SAVINGS_PCT[day] ?? 10;
 }
 
 export interface ClientPriceResult {
-  referencePrice: number;
   carrierRate: number;
   mode: ShippingMode;
-  distributableSavings: number;
-  savingsPct: number;
-  clientDiscount: number;
-  clientPrice: number;
-  companyMargin: number;
+  finditFloor: number;       // guaranteed FINDIT margin (30% of carrier)
+  minClientPrice: number;    // carrier + floor (FINDIT price floor)
+  maxClientPrice: number;    // $252 = 40% below casillero $420
+  distributableSavings: number; // maxClientPrice - minClientPrice (split by day)
+  clientSavingsPct: number;  // % of distributable that goes to client
+  clientDiscount: number;    // distributable × clientSavingsPct
+  clientPrice: number;       // what client actually pays
+  finditMargin: number;      // total FINDIT earns per m³
+  savingVsCompetitor: number; // how much client saves vs casillero
 }
 
 /**
- * Calculate the price a client pays when joining on `dayJoined`
- * with the pool at `currentVolumeM3`.
- * Automatically selects LCL vs FCL based on pool volume.
+ * Calculate the price a client pays when joining on `dayJoined`.
+ *
+ * Two-layer structure:
+ *   Layer 1 — FINDIT guaranteed floor: carrier × (1 + FINDIT_MARGIN_FLOOR_PCT)
+ *   Layer 2 — Variable savings pool: (maxClientPrice - minClientPrice), split by day
+ *
+ * Client always pays: between minClientPrice (day 1) and maxClientPrice (day 10)
+ * FINDIT always earns: at least finditFloor per m³
  */
 export function calculateClientPrice(
   dayJoined: number,
   currentVolumeM3: number,
   providerRates?: ProviderRate[],
-  referencePrice: number = DEFAULT_REFERENCE_PRICE,
 ): ClientPriceResult {
   const { mode, costPerM3: carrierRateByMode } = getCarrierCostByMode(currentVolumeM3);
-  // When provider rates are supplied (LCL only), use them; otherwise use mode-based cost
   const carrierRate = mode === 'LCL'
     ? getCarrierRate(currentVolumeM3, providerRates)
     : carrierRateByMode;
 
-  const distributableSavings = Math.max(0, referencePrice - carrierRate);
-  const savingsPct = getSavingsPct(dayJoined);
-  const clientDiscount = distributableSavings * (savingsPct / 100);
-  const clientPrice = referencePrice - clientDiscount;
-  const companyMargin = clientPrice - carrierRate;
+  const finditFloor        = carrierRate * FINDIT_MARGIN_FLOOR_PCT;
+  const minClientPrice     = carrierRate + finditFloor;
+  const maxClientPrice     = MAX_CLIENT_PRICE;
+  const distributableSavings = Math.max(0, maxClientPrice - minClientPrice);
+
+  const clientSavingsPct   = getClientSavingsPct(dayJoined);
+  const clientDiscount     = distributableSavings * (clientSavingsPct / 100);
+  const clientPrice        = maxClientPrice - clientDiscount;
+  const finditMargin       = clientPrice - carrierRate;
+  const savingVsCompetitor = MARKET_RATE_CASILLERO - clientPrice;
 
   return {
-    referencePrice,
     carrierRate,
     mode,
+    finditFloor,
+    minClientPrice,
+    maxClientPrice,
     distributableSavings,
-    savingsPct,
+    clientSavingsPct,
     clientDiscount,
     clientPrice,
-    companyMargin,
+    finditMargin,
+    savingVsCompetitor,
   };
 }
 
