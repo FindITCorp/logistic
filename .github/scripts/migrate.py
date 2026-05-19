@@ -31,29 +31,41 @@ GITHUB_STEP_SUMMARY = os.environ.get("GITHUB_STEP_SUMMARY", "")
 
 # ── Helper: run SQL via Management API ────────────────────────────────────────
 def run_sql(sql: str, label: str = "query") -> tuple[bool, object]:
-    """Execute SQL via Supabase Management API /database/query endpoint."""
-    payload = json.dumps({"query": sql}).encode("utf-8")
-    req = request.Request(
-        f"{MGMT_API}/projects/{PROJECT_ID}/database/query",
-        data=payload,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {PAT}",
-            "Content-Type": "application/json",
-        },
+    """Execute SQL via Supabase Management API /database/query endpoint.
+    Uses curl subprocess to avoid Cloudflare's Python-urllib UA block.
+    """
+    import subprocess, tempfile, os as _os
+    payload = json.dumps({"query": sql})
+
+    result = subprocess.run(
+        [
+            "curl", "-s",
+            "--max-time", "60",
+            "-X", "POST",
+            f"{MGMT_API}/projects/{PROJECT_ID}/database/query",
+            "-H", f"Authorization: Bearer {PAT}",
+            "-H", "Content-Type: application/json",
+            "-d", payload,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=65,
     )
+
+    if result.returncode != 0:
+        return False, f"curl error {result.returncode}: {result.stderr}"
+
+    body = result.stdout.strip()
     try:
-        with request.urlopen(req, timeout=60) as resp:
-            body = resp.read().decode("utf-8")
-            try:
-                return True, json.loads(body)
-            except json.JSONDecodeError:
-                return True, body
-    except error.HTTPError as e:
-        body = e.read().decode("utf-8")
-        return False, f"HTTP {e.code}: {body}"
-    except Exception as e:
-        return False, str(e)
+        parsed = json.loads(body)
+        # Supabase returns an error object with 'message' on failure
+        if isinstance(parsed, dict) and "message" in parsed:
+            return False, f"API error: {parsed.get('message', body)}"
+        return True, parsed
+    except json.JSONDecodeError:
+        if body.startswith("error code:"):
+            return False, f"Cloudflare/CDN block: {body}"
+        return True, body
 
 
 def write_summary(text: str) -> None:
