@@ -31,13 +31,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Session pooler (port 5432) — bypasses IP allowlist on many Supabase plans
-      # If this fails, try transaction pooler (port 6543) with user postgres.fvefwnojcqbdkcmfngnu
-      PGHOST: aws-0-us-east-1.pooler.supabase.com
-      PGPORT: "5432"
-      PGUSER: postgres.fvefwnojcqbdkcmfngnu
       PGDATABASE: postgres
       PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_ID: fvefwnojcqbdkcmfngnu
 
     steps:
       - name: Checkout repository
@@ -112,37 +108,60 @@ jobs:
               ;;
           esac
 
-      - name: Verify DB connection
+      - name: Find working DB connection
         run: |
-          echo "=== Testing DB connection ==="
-          echo "Host: $PGHOST:$PGPORT"
-          echo "User: $PGUSER / DB: $PGDATABASE"
+          echo "=== Detecting working DB connection endpoint ==="
 
-          # Try session pooler first
-          if psql -c "SELECT current_database() AS db, now() AS ts;" 2>&1; then
-            echo "DB connection OK via session pooler"
-          else
-            echo "Session pooler failed. Trying direct DB host..."
-            # Fallback: direct connection
-            export PGHOST="db.fvefwnojcqbdkcmfngnu.supabase.co"
-            export PGPORT="5432"
-            export PGUSER="postgres"
-            if psql -c "SELECT current_database() AS db, now() AS ts;" 2>&1; then
-              echo "DB connection OK via direct host"
-              # Update env for subsequent steps
-              echo "PGHOST=db.fvefwnojcqbdkcmfngnu.supabase.co" >> "$GITHUB_ENV"
-              echo "PGUSER=postgres" >> "$GITHUB_ENV"
+          try_connect() {
+            local HOST="$1" PORT="$2" USER="$3"
+            echo -n "  Testing ${USER}@${HOST}:${PORT} ... "
+            if PGHOST="$HOST" PGPORT="$PORT" PGUSER="$USER" \
+                timeout 8 psql -c "SELECT 1;" -o /dev/null 2>/dev/null; then
+              echo "OK"
+              return 0
             else
-              echo ""
-              echo "DB connection FAILED on both pooler and direct host."
-              echo "Runner IP is not in the Supabase network allowlist."
-              echo ""
-              echo "Fix options:"
-              echo "  1. Dashboard: https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
-              echo "     Add 0.0.0.0/0 to Allowed CIDRs"
-              echo "  2. Add SUPABASE_ACCESS_TOKEN secret (personal access token that owns this project)"
-              exit 1
+              echo "FAIL"
+              return 1
             fi
+          }
+
+          CONNECTED=false
+
+          # Try all known Supabase pooler regions + direct host
+          for REGION in us-east-1 us-east-2 us-west-1 us-west-2 eu-west-1 eu-west-2 ap-southeast-1; do
+            HOST="aws-0-${REGION}.pooler.supabase.com"
+            USER="postgres.${PROJECT_ID}"
+            if try_connect "$HOST" 5432 "$USER"; then
+              echo "PGHOST=${HOST}" >> "$GITHUB_ENV"
+              echo "PGPORT=5432" >> "$GITHUB_ENV"
+              echo "PGUSER=${USER}" >> "$GITHUB_ENV"
+              CONNECTED=true
+              echo "Using session pooler: ${HOST}"
+              break
+            fi
+          done
+
+          if [ "$CONNECTED" = false ]; then
+            # Try direct DB host
+            HOST="db.${PROJECT_ID}.supabase.co"
+            USER="postgres"
+            if try_connect "$HOST" 5432 "$USER"; then
+              echo "PGHOST=${HOST}" >> "$GITHUB_ENV"
+              echo "PGPORT=5432" >> "$GITHUB_ENV"
+              echo "PGUSER=${USER}" >> "$GITHUB_ENV"
+              CONNECTED=true
+              echo "Using direct DB host: ${HOST}"
+            fi
+          fi
+
+          if [ "$CONNECTED" = false ]; then
+            echo ""
+            echo "ERROR: Could not connect to any Supabase endpoint."
+            echo "The runner IP is not in the Supabase network allowlist."
+            echo ""
+            echo "To fix, add 0.0.0.0/0 to Allowed CIDRs at:"
+            echo "  https://supabase.com/dashboard/project/${PROJECT_ID}/settings/network"
+            exit 1
           fi
 
       - name: Create migrations tracking table
