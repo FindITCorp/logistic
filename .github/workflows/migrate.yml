@@ -31,9 +31,11 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      PGHOST: db.fvefwnojcqbdkcmfngnu.supabase.co
+      # Session pooler (port 5432) — bypasses IP allowlist on many Supabase plans
+      # If this fails, try transaction pooler (port 6543) with user postgres.fvefwnojcqbdkcmfngnu
+      PGHOST: aws-0-us-east-1.pooler.supabase.com
       PGPORT: "5432"
-      PGUSER: postgres
+      PGUSER: postgres.fvefwnojcqbdkcmfngnu
       PGDATABASE: postgres
       PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
@@ -115,23 +117,33 @@ jobs:
           echo "=== Testing DB connection ==="
           echo "Host: $PGHOST:$PGPORT"
           echo "User: $PGUSER / DB: $PGDATABASE"
-          # Test TCP connectivity first
-          if timeout 10 bash -c "echo >/dev/tcp/$PGHOST/$PGPORT" 2>/dev/null; then
-            echo "TCP port $PGPORT reachable"
+
+          # Try session pooler first
+          if psql -c "SELECT current_database() AS db, now() AS ts;" 2>&1; then
+            echo "DB connection OK via session pooler"
           else
-            echo "WARNING: TCP port $PGPORT not directly reachable (may be network-filtered)"
-          fi
-          # Try connecting
-          psql -c "SELECT current_database() AS db, now() AS ts;" \
-            && echo "DB connection OK" \
-            || {
+            echo "Session pooler failed. Trying direct DB host..."
+            # Fallback: direct connection
+            export PGHOST="db.fvefwnojcqbdkcmfngnu.supabase.co"
+            export PGPORT="5432"
+            export PGUSER="postgres"
+            if psql -c "SELECT current_database() AS db, now() AS ts;" 2>&1; then
+              echo "DB connection OK via direct host"
+              # Update env for subsequent steps
+              echo "PGHOST=db.fvefwnojcqbdkcmfngnu.supabase.co" >> "$GITHUB_ENV"
+              echo "PGUSER=postgres" >> "$GITHUB_ENV"
+            else
               echo ""
-              echo "DB connection FAILED"
-              echo "This usually means the runner IP is not in the Supabase allowlist."
-              echo "Fix: https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
+              echo "DB connection FAILED on both pooler and direct host."
+              echo "Runner IP is not in the Supabase network allowlist."
+              echo ""
+              echo "Fix options:"
+              echo "  1. Dashboard: https://supabase.com/dashboard/project/fvefwnojcqbdkcmfngnu/settings/network"
               echo "     Add 0.0.0.0/0 to Allowed CIDRs"
+              echo "  2. Add SUPABASE_ACCESS_TOKEN secret (personal access token that owns this project)"
               exit 1
-            }
+            fi
+          fi
 
       - name: Create migrations tracking table
         run: |
