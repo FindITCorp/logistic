@@ -77,26 +77,37 @@ function PainPointSection() {
   return (
     <section className="py-14 bg-slate-50 border-b border-slate-100">
       <div className="container max-w-3xl">
+        {/* Main comparison */}
         <div className="grid gap-4 sm:grid-cols-3 text-center">
           <div className="rounded-2xl bg-red-50 border border-red-100 p-5">
-            <p className="text-3xl font-extrabold text-red-600">$380–550</p>
-            <p className="text-sm text-red-700 font-medium mt-1">Lo que cobran los consolidadores</p>
-            <p className="text-xs text-slate-500 mt-1">(LCL bodega-a-bodega, por m³)</p>
+            <p className="text-3xl font-extrabold text-red-600">$420</p>
+            <p className="text-sm text-red-700 font-medium mt-1">Casillero Guangzhou → Panamá</p>
+            <p className="text-xs text-slate-500 mt-1">precio publicado, por m³ · 45–55 días</p>
           </div>
           <div className="rounded-2xl bg-amber-50 border border-amber-100 p-5 flex items-center justify-center">
             <div>
               <p className="text-4xl font-black text-amber-500">vs</p>
-              <p className="text-xs text-slate-500 mt-1">Sin transparencia ni descuento por volumen</p>
+              <p className="text-xs text-slate-500 mt-1">mismo servicio, misma ruta</p>
             </div>
           </div>
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-5">
             <p className="text-3xl font-extrabold text-emerald-600">$180–250</p>
-            <p className="text-sm text-emerald-700 font-medium mt-1">Tu precio en pool FINDIT</p>
-            <p className="text-xs text-slate-500 mt-1">(mismo servicio, precio justo, por m³)</p>
+            <p className="text-sm text-emerald-700 font-medium mt-1">FINDIT pool consolidado</p>
+            <p className="text-xs text-slate-500 mt-1">precio que baja según volumen del pool</p>
           </div>
         </div>
+
+        {/* Small cargo note */}
+        <div className="mt-4 rounded-xl bg-orange-50 border border-orange-100 p-3 flex items-center gap-3">
+          <span className="text-2xl">📦</span>
+          <p className="text-sm text-orange-800">
+            <strong>Cargas pequeñas (&lt;1 m³):</strong> el casillero cobra $17/pie cúbico ≈ <strong>$600/m³</strong>.
+            Con FINDIT el mínimo es 0.5 m³ al mismo precio de pool.
+          </p>
+        </div>
+
         <p className="text-center text-sm text-slate-500 mt-4">
-          LMA Global publica $285/m³. Con un pool lleno FINDIT llega a $180–250/m³ — mismo servicio, precio que baja según cuántos se sumen.
+          Precios verificados mayo 2026 · Sin réplicas · Salidas quincenales desde Guangzhou
         </p>
       </div>
     </section>

@@ -1,7 +1,20 @@
 export const POOL_DURATION_DAYS = 10;
 
-// Default reference price (max the client ever pays) — matches LMA competitor's $285 all-in
-// We use $285 as ceiling: if we can't beat that, we don't charge more
+// ─── Competitor market rates (real, verified May 2026) ────────────────────────
+// Casillero Guangzhou→Panamá (real operator, Panama):
+//   - Small cargo: $17/ft³ = $600/m³ equivalent
+//   - ≥1 CBM:      $420/CBM  ← primary competitor benchmark
+//   - Transit:     45–55 days, bi-weekly departures
+// LMA Global Logistics (published rate, lmagloballogistics.net):
+//   - $285/CBM warehouse-to-warehouse (no customs included)
+//   - Transit: ~37 days
+export const MARKET_RATE_CASILLERO = 420; // real Panama competitor, ≥1 CBM
+export const MARKET_RATE_SMALL     = 600; // real Panama competitor, <1 CBM ($17/ft³)
+export const MARKET_RATE_LMA       = 285; // LMA Global, sophisticated competitor
+
+// FINDIT reference price: what we charge when pool is at minimum volume.
+// Set at $285 (matches LMA) — we're already cheaper than casillero at $420.
+// As pool fills, client price drops toward $180–230.
 export const DEFAULT_REFERENCE_PRICE = 285;
 
 // ─── Shipping mode selection ──────────────────────────────────────────────────

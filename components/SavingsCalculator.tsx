@@ -7,13 +7,10 @@ import {
   selectShippingMode,
   FCL_BREAKEVEN_M3,
   MIN_ENTRY_M3,
+  MARKET_RATE_CASILLERO,
+  MARKET_RATE_LMA,
   type ShippingMode,
 } from '@/lib/pricing'
-
-// LMA Global Logistics publishes $285/CBM (warehouse-to-warehouse, no customs)
-// Customs + delivery adds ~$150-300/CBM for small importers
-const COMPETITOR_LCL_RATE = 285   // LMA published all-in LCL rate
-const BROKER_DDP_RATE     = 500   // typical DDP broker rate (mid-range)
 
 const MODE_LABEL: Record<ShippingMode, string> = {
   LCL:    'LCL consolidado',
@@ -31,10 +28,12 @@ export default function SavingsCalculator() {
   const [volume, setVolume]       = useState(2)
   const [day, setDay]             = useState(3)
   const [poolVolume, setPoolVol]  = useState(12) // current pool fill
-  const [compare, setCompare]     = useState<'lma' | 'broker'>('lma')
+  const [compare, setCompare]     = useState<'casillero' | 'lma'>('casillero')
 
-  const competitorRate = compare === 'lma' ? COMPETITOR_LCL_RATE : BROKER_DDP_RATE
-  const competitorLabel = compare === 'lma' ? 'LMA Global ($285/m³)' : 'Broker DDP ($500/m³)'
+  const competitorRate  = compare === 'casillero' ? MARKET_RATE_CASILLERO : MARKET_RATE_LMA
+  const competitorLabel = compare === 'casillero'
+    ? `Casillero Panamá ($${MARKET_RATE_CASILLERO}/m³)`
+    : `LMA Global ($${MARKET_RATE_LMA}/m³)`
 
   const result   = calculateClientPrice(day, poolVolume)
   const mode     = selectShippingMode(poolVolume)
@@ -65,27 +64,32 @@ export default function SavingsCalculator() {
         <div className="rounded-2xl bg-white/10 border border-white/20 backdrop-blur-sm p-6 sm:p-8 space-y-6">
 
           {/* Comparar contra */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCompare('lma')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                compare === 'lma'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white/5 text-blue-300 hover:bg-white/10'
-              }`}
-            >
-              vs LMA $285/m³
-            </button>
-            <button
-              onClick={() => setCompare('broker')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-                compare === 'broker'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-white/5 text-blue-300 hover:bg-white/10'
-              }`}
-            >
-              vs Broker DDP $500/m³
-            </button>
+          <div>
+            <p className="text-xs text-blue-300 mb-2 text-center">Comparar contra:</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCompare('casillero')}
+                className={`flex-1 rounded-lg py-2 px-3 text-sm font-medium transition-colors ${
+                  compare === 'casillero'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-white/5 text-blue-300 hover:bg-white/10'
+                }`}
+              >
+                Casillero Panamá<br/>
+                <span className="text-xs font-bold text-red-300">${MARKET_RATE_CASILLERO}/m³</span>
+              </button>
+              <button
+                onClick={() => setCompare('lma')}
+                className={`flex-1 rounded-lg py-2 px-3 text-sm font-medium transition-colors ${
+                  compare === 'lma'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-white/5 text-blue-300 hover:bg-white/10'
+                }`}
+              >
+                LMA Global<br/>
+                <span className="text-xs font-bold text-amber-300">${MARKET_RATE_LMA}/m³</span>
+              </button>
+            </div>
           </div>
 
           {/* Tu volumen */}
