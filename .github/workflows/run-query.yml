@@ -19,9 +19,6 @@ on:
 permissions:
   contents: read
 
-env:
-  DB_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.fvefwnojcqbdkcmfngnu.supabase.co:5432/postgres
-
 jobs:
   run-query:
     name: Execute SQL Query
@@ -44,6 +41,8 @@ jobs:
         if: ${{ github.event.inputs.dry_run == 'false' }}
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # Session pooler — not subject to IP allowlist
+          DB_URL: postgresql://postgres.fvefwnojcqbdkcmfngnu:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres
           SQL_QUERY: ${{ github.event.inputs.sql }}
         run: |
           echo "Executing query..."

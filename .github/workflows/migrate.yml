@@ -19,9 +19,6 @@ on:
 permissions:
   contents: read
 
-env:
-  DB_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.fvefwnojcqbdkcmfngnu.supabase.co:5432/postgres
-
 jobs:
   migrate:
     name: Apply SQL Migrations
@@ -36,18 +33,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
 
-      - name: Verify DB connection
+      - name: Verify DB connection (pooler)
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # Session pooler — NOT subject to the IP allowlist
+          # Format: postgresql://postgres.[project-id]:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+          DB_URL: postgresql://postgres.fvefwnojcqbdkcmfngnu:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres
         run: |
-          echo "Testing connection to Supabase..."
-          psql "$DB_URL" -c "SELECT current_database(), version();" \
+          echo "Testing connection via Supabase session pooler..."
+          psql "$DB_URL" -c "SELECT current_database(), now();" \
             && echo "Connection OK" \
             || { echo "Connection FAILED"; exit 1; }
 
       - name: Create migrations tracking table
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DB_URL: postgresql://postgres.fvefwnojcqbdkcmfngnu:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres
         run: |
           psql "$DB_URL" <<'SQL'
             CREATE TABLE IF NOT EXISTS _migrations (
@@ -62,6 +63,7 @@ jobs:
       - name: Run pending migrations
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DB_URL: postgresql://postgres.fvefwnojcqbdkcmfngnu:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:5432/postgres
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           set -euo pipefail
