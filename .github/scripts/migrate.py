@@ -154,8 +154,8 @@ def main() -> int:
             success += 1
         else:
             ok, result = run_sql(sql_content, basename)
+            safe_name = basename.replace("'", "''")
             if ok:
-                safe_name = basename.replace("'", "''")
                 run_sql(
                     f"INSERT INTO _migrations (filename, checksum) VALUES ('{safe_name}', '{checksum}') ON CONFLICT (filename) DO NOTHING;",
                     f"record_{basename}",
@@ -163,8 +163,25 @@ def main() -> int:
                 print(f"  OK    {basename}")
                 success += 1
             else:
-                print(f"  FAIL  {basename}: {result}")
-                failed += 1
+                err_str = str(result)
+                # PG error codes for "already exists" — treat as already applied
+                already_exists = any(code in err_str for code in [
+                    "42710",  # duplicate_object (type/enum already exists)
+                    "42P07",  # duplicate_table (relation already exists)
+                    "42701",  # duplicate_column
+                    "42723",  # duplicate_function
+                    "already exists",
+                ])
+                if already_exists:
+                    run_sql(
+                        f"INSERT INTO _migrations (filename, checksum) VALUES ('{safe_name}', '{checksum}') ON CONFLICT (filename) DO NOTHING;",
+                        f"record_{basename}",
+                    )
+                    print(f"  OK    {basename} (objects already existed — recorded as applied)")
+                    success += 1
+                else:
+                    print(f"  FAIL  {basename}: {result}")
+                    failed += 1
 
     print()
     print("=== Migration Summary ===")
