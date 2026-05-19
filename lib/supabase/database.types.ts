@@ -1,12 +1,12 @@
 export type AssignmentMode = 'auto' | 'manual'
 export type NotifyBy = 'whatsapp' | 'email' | 'both'
-export type PoolStatus = 'active' | 'closed' | 'shipped'
-export type ShipmentStatus = 'received' | 'assigned' | 'shipped'
+export type PoolStatus = 'active' | 'closed' | 'in_transit' | 'at_colon' | 'at_tocumen' | 'completed'
+export type ShipmentStatus = 'received' | 'assigned' | 'in_transit' | 'at_tocumen' | 'delivered'
 export type OriginCity = 'shanghai' | 'guangzhou' | 'shenzhen'
 
 export interface Client {
   id: string
-  client_code: string        // FDT-XXXX — shown in shipping address
+  client_code: string
   name: string
   whatsapp: string | null
   email: string | null
@@ -17,18 +17,22 @@ export interface Client {
 
 export interface Pool {
   id: string
-  pool_number: number        // human-readable: Pool #001
+  pool_number: number
   origin_city: OriginCity
   destination: string
   current_volume_m3: number
   participants: number
-  day_number: number         // 1–10
+  day_number: number
   status: PoolStatus
   carrier_rate: number
   provider_id: string | null
   reference_price_m3: number
   departure_date: string | null
   created_at: string
+  dispatched_at: string | null
+  arrived_colon_at: string | null
+  arrived_tocumen_at: string | null
+  completed_at: string | null
 }
 
 export interface Shipment {
@@ -44,6 +48,14 @@ export interface Shipment {
   arrived_at: string
   assigned_at: string | null
   created_at: string
+  declared_value: number | null
+  invoice_received: boolean
+  advance_paid: boolean
+  advance_amount: number | null
+  final_paid: boolean
+  final_amount: number | null
+  pickup_at: string | null
+  notes: string | null
   // joined relations
   client?: Client
   pool?: Pool

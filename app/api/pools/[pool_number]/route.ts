@@ -14,13 +14,14 @@ export async function GET(_req: NextRequest, { params }: { params: { pool_number
 
   if (!pool) return NextResponse.json({ error: `Pool #${String(num).padStart(3,'0')} no encontrado` }, { status: 404 })
 
-  // All shipments in this pool with client info and order info
   const { data: members } = await db
     .from('pool_members')
     .select(`
       *,
-      client:clients(name, client_code, whatsapp),
-      shipment:shipments(volume_m3, weight_kg, origin_city, status, arrived_at)
+      client:clients(name, client_code, whatsapp, email),
+      shipment:shipments(id, volume_m3, weight_kg, origin_city, status, arrived_at,
+        declared_value, invoice_received, advance_paid, advance_amount,
+        final_paid, final_amount, pickup_at, notes)
     `)
     .eq('pool_id', pool.id)
     .order('joined_at', { ascending: true })

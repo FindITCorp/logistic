@@ -29,19 +29,26 @@ export const FCL_40FT_CAPACITY = 55;
 // LCL becomes uncompetitive vs FCL above this threshold
 export const FCL_BREAKEVEN_M3 = 20; // conservative: 20 CBM → 20ft FCL at $100/m³ = $2,000
 
-// ─── Panama customs fixed costs per pool shipment ────────────────────────────
-// These are amortized across the pool volume and included in FINDIT's quoted price.
-// Client pays variable taxes (arancel + ITBMS) separately when picking up cargo.
+// ─── Panama fixed costs per pool shipment ────────────────────────────────────
+// Amortized across pool volume, included in FINDIT's quoted price.
+// Client pays variable taxes separately at cargo pickup.
 //
 // Fixed per pool (one consolidated declaration):
 //   Customs broker (agente aduanal): ~$250
 //   ANA administrative fee:           $70
 //   Port handling (THC Colón):       ~$100
 //   Total:                            $420
-//
-// Per m³: $420 ÷ pool_volume  (e.g. $28/m³ at 15m³, $21/m³ at 20m³)
 export const CUSTOMS_FIXED_PER_POOL = 420;
-
+//
+// Last-mile transport: Colón port → FINDIT warehouse in Tocumen (Panama City)
+//   Cargo truck per pool shipment:   ~$200
+//   (FINDIT owns/rents receiving space in Tocumen — no warehouse rental cost)
+export const COLON_TO_TOCUMEN_TRANSPORT = 200;
+//
+// Total fixed overhead per pool: $620
+// Per m³ at 10 m³: $62/m³ | at 15 m³: $41/m³ | at 20 m³: $31/m³
+export const FIXED_OVERHEAD_PER_POOL = CUSTOMS_FIXED_PER_POOL + COLON_TO_TOCUMEN_TRANSPORT;
+//
 // Variable taxes the CLIENT pays at pickup (NOT included in FINDIT price):
 //   Arancel (import duty): 0–15% of declared CIF value (varies by HS code)
 //   ITBMS (Panama VAT):    7% of (CIF + arancel)
@@ -130,26 +137,33 @@ export function getClientSavingsPct(dayJoined: number): number {
 export interface ClientPriceResult {
   carrierRate: number;
   mode: ShippingMode;
+  overheadPerM3: number;     // fixed pool overhead amortized per m³ (customs + Colón→Tocumen)
+  totalCostPerM3: number;    // carrierRate + overheadPerM3 (FINDIT's real cost)
   finditFloor: number;       // guaranteed FINDIT margin (30% of carrier)
-  minClientPrice: number;    // carrier + floor (FINDIT price floor)
-  maxClientPrice: number;    // $252 = 40% below casillero $420
-  distributableSavings: number; // maxClientPrice - minClientPrice (split by day)
-  clientSavingsPct: number;  // % of distributable that goes to client
-  clientDiscount: number;    // distributable × clientSavingsPct
-  clientPrice: number;       // what client actually pays
-  finditMargin: number;      // total FINDIT earns per m³
-  savingVsCompetitor: number; // how much client saves vs casillero
+  minClientPrice: number;    // totalCost + finditFloor (absolute floor)
+  maxClientPrice: number;    // max($252, minClientPrice) — always competitive
+  distributableSavings: number;
+  clientSavingsPct: number;
+  clientDiscount: number;
+  clientPrice: number;       // what client pays per m³
+  finditMargin: number;      // FINDIT earns per m³ (clientPrice - totalCostPerM3)
+  savingVsCompetitor: number;
+  // Two-stage payment breakdown
+  advancePerM3: number;      // client pays before pool departs (= carrierRate)
+  finalPerM3: number;        // client pays at Tocumen pickup (= clientPrice - advancePerM3)
 }
 
 /**
  * Calculate the price a client pays when joining on `dayJoined`.
  *
- * Two-layer structure:
- *   Layer 1 — FINDIT guaranteed floor: carrier × (1 + FINDIT_MARGIN_FLOOR_PCT)
- *   Layer 2 — Variable savings pool: (maxClientPrice - minClientPrice), split by day
+ * Cost layers:
+ *   carrierRate   — ocean freight (LCL or FCL amortized)
+ *   overheadPerM3 — fixed pool costs (customs $420 + transport $200) ÷ pool volume
+ *   finditFloor   — minimum FINDIT margin (30% of carrier)
  *
- * Client always pays: between minClientPrice (day 1) and maxClientPrice (day 10)
- * FINDIT always earns: at least finditFloor per m³
+ * Two-stage payment:
+ *   advance  = carrierRate × volume  (paid before departure from China)
+ *   final    = (clientPrice - carrierRate) × volume  (paid at Tocumen pickup)
  */
 export function calculateClientPrice(
   dayJoined: number,
@@ -161,20 +175,29 @@ export function calculateClientPrice(
     ? getCarrierRate(currentVolumeM3, providerRates)
     : carrierRateByMode;
 
-  const finditFloor        = carrierRate * FINDIT_MARGIN_FLOOR_PCT;
-  const minClientPrice     = carrierRate + finditFloor;
-  const maxClientPrice     = MAX_CLIENT_PRICE;
+  const safeVolume     = Math.max(currentVolumeM3, 1);
+  const overheadPerM3  = FIXED_OVERHEAD_PER_POOL / safeVolume;
+  const totalCostPerM3 = carrierRate + overheadPerM3;
+  const finditFloor    = carrierRate * FINDIT_MARGIN_FLOOR_PCT;
+  const minClientPrice = totalCostPerM3 + finditFloor;
+  // Cap is $252 OR minClientPrice if overhead pushes us above — client always covered
+  const maxClientPrice     = Math.max(MAX_CLIENT_PRICE, minClientPrice);
   const distributableSavings = Math.max(0, maxClientPrice - minClientPrice);
 
   const clientSavingsPct   = getClientSavingsPct(dayJoined);
   const clientDiscount     = distributableSavings * (clientSavingsPct / 100);
   const clientPrice        = maxClientPrice - clientDiscount;
-  const finditMargin       = clientPrice - carrierRate;
+  const finditMargin       = clientPrice - totalCostPerM3;
   const savingVsCompetitor = MARKET_RATE_CASILLERO - clientPrice;
+
+  const advancePerM3 = carrierRate;
+  const finalPerM3   = clientPrice - advancePerM3;
 
   return {
     carrierRate,
     mode,
+    overheadPerM3,
+    totalCostPerM3,
     finditFloor,
     minClientPrice,
     maxClientPrice,
@@ -184,6 +207,8 @@ export function calculateClientPrice(
     clientPrice,
     finditMargin,
     savingVsCompetitor,
+    advancePerM3,
+    finalPerM3,
   };
 }
 

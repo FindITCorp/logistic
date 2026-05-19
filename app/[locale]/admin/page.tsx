@@ -125,14 +125,14 @@ export default function AdminPage() {
 
         {/* Quick links */}
         <div className="flex gap-2 mb-4 flex-wrap">
+          <a href="/admin/pools" className="flex items-center gap-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors">
+            <Package className="w-3.5 h-3.5" /> Gestión de pools
+          </a>
           <a href="/admin/leads" className="flex items-center gap-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-colors">
             <Users className="w-3.5 h-3.5" /> Leads
           </a>
           <a href="/admin/proveedores" className="flex items-center gap-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 px-3 py-1.5 text-xs font-medium text-purple-400 transition-colors">
             <Truck className="w-3.5 h-3.5" /> Proveedores
-          </a>
-          <a href="/pools" className="flex items-center gap-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors">
-            <Package className="w-3.5 h-3.5" /> Ver pools
           </a>
         </div>
 
