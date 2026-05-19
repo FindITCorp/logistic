@@ -58,3 +58,4 @@ supabase/.env
 # Logs
 logs/
 *.log
+__pycache__/
