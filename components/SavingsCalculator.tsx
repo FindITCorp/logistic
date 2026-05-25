@@ -6,11 +6,12 @@ import {
   calculateClientPrice,
   selectShippingMode,
   FCL_BREAKEVEN_M3,
-  MIN_ENTRY_M3,
   MARKET_RATE_CASILLERO,
   MARKET_RATE_LMA,
   type ShippingMode,
 } from '@/lib/pricing'
+
+const MIN_ENTRY_M3 = 0.5
 
 const MODE_LABEL: Record<ShippingMode, string> = {
   LCL:    'LCL consolidado',
