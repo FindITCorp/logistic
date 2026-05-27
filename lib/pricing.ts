@@ -71,9 +71,11 @@ export function getCarrierCostByMode(poolVolumeM3: number): { mode: ShippingMode
   return { mode: 'LCL', costPerM3: getCarrierRate(poolVolumeM3) };
 }
 
-// ─── LCL volume tiers (what the forwarder charges us) ────────────────────────
-// Based on real quotes: TJ-China Freight $30/CBM flat (confirmed Zoe)
-// Conservative model uses $85-100/CBM until we have 3+ forwarder quotes
+// ─── LCL volume tiers (what the forwarder charges us, all-in origin) ─────────
+// BL Shipping confirmed rate (WhatsApp 25 May 2026):
+//   O/F: $85/CBM + LCL RMB40/CBM + doc/customs/handling RMB920 fixed/BL
+//   All-in per CBM: ~$121 at 5m³ | ~$106 at 10m³ | ~$101 at 15-20m³
+// Destination charges at Colón pending confirmation.
 
 export interface VolumeTier {
   minM3: number;
@@ -82,10 +84,10 @@ export interface VolumeTier {
 }
 
 export const DEFAULT_VOLUME_TIERS: VolumeTier[] = [
-  { minM3: 0,  maxM3: 5,    carrierRate: 100 },
-  { minM3: 5,  maxM3: 15,   carrierRate: 92  },
-  { minM3: 15, maxM3: 20,   carrierRate: 87  },
-  { minM3: 20, maxM3: null, carrierRate: 82  }, // FCL territory starts here
+  { minM3: 0,  maxM3: 5,    carrierRate: 121 }, // BL Shipping all-in at 5 CBM
+  { minM3: 5,  maxM3: 15,   carrierRate: 106 }, // BL Shipping all-in at 10 CBM
+  { minM3: 15, maxM3: 20,   carrierRate: 101 }, // BL Shipping all-in at 15 CBM
+  { minM3: 20, maxM3: null, carrierRate: 101 }, // pending FCL quote
 ];
 
 // ─── Profitability floor ─────────────────────────────────────────────────────
