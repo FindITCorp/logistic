@@ -43,6 +43,9 @@ jobs:
           SUPABASE_SERVICE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GH_NOTIFY: ${{ secrets.GH_NOTIFY_TOKEN }}
           SITE_URL: "https://logistic-six-alpha.vercel.app"
+          ADMIN_SETUP_KEY: ${{ secrets.ADMIN_SETUP_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ADMIN_EMAIL: "enrique.eaguilarh@gmail.com"
         run: |
           PROJECT_ID="prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5"
           TEAM_ID="team_BrCUd1PJnqaQTOuhJFrDYsw3"
@@ -62,4 +65,7 @@ jobs:
           set_env "SUPABASE_SERVICE_ROLE_KEY"      "$SUPABASE_SERVICE"
           set_env "NEXT_PUBLIC_SITE_URL"           "$SITE_URL"
           set_env "GITHUB_TOKEN_NOTIFY"            "$GH_NOTIFY"
+          set_env "ADMIN_SETUP_KEY"                "$ADMIN_SETUP_KEY"
+          set_env "CRON_SECRET"                    "$CRON_SECRET"
+          set_env "ADMIN_EMAIL"                    "$ADMIN_EMAIL"
           echo "Done."
