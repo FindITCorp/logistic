@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken, requireAdmin } from '@/lib/adminAuth'
 
 const uploadSchema = z.object({
   token: z.string().min(10),
@@ -83,6 +84,13 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const poolId = req.nextUrl.searchParams.get('pool_id')
   const clientCode = req.nextUrl.searchParams.get('client_code')
+
+  // pool_id queries are admin-only (customs export); client_code queries are public (client status page)
+  if (poolId) {
+    const session = await verifyAdminToken(req)
+    const authError = requireAdmin(session)
+    if (authError) return authError
+  }
 
   const db = createServerClient()
   let query = db

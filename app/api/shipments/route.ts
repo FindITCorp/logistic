@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { createServerClient } from '@/lib/supabase/client'
 import { getClientByCode } from '@/lib/clients'
 import { assignShipmentToPool, findBestPool } from '@/lib/poolAssignment'
+import { verifyAdminToken, requireAdmin } from '@/lib/adminAuth'
 
 const schema = z.object({
   client_code: z.string().regex(/^FDT-\d{4}$/),
@@ -122,6 +123,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await verifyAdminToken(req)
+  const authError = requireAdmin(session)
+  if (authError) return authError
+
   const db = createServerClient()
   const poolId = req.nextUrl.searchParams.get('pool_id')
   const clientCode = req.nextUrl.searchParams.get('client_code')

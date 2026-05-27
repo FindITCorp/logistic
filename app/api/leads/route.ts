@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken, requireAdmin } from '@/lib/adminAuth'
 
 const schema = z.object({
   name: z.string().min(2),
@@ -65,7 +66,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await verifyAdminToken(req)
+  const authError = requireAdmin(session)
+  if (authError) return authError
+
   try {
     const db = createServerClient()
     const { data } = await db
@@ -79,6 +84,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const session = await verifyAdminToken(req)
+  const authError = requireAdmin(session)
+  if (authError) return authError
+
   try {
     const { id, status } = await req.json()
     const db = createServerClient()
