@@ -120,3 +120,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
 }
+
+export async function GET(req: NextRequest) {
+  const db = createServerClient()
+  const poolId = req.nextUrl.searchParams.get('pool_id')
+  const clientCode = req.nextUrl.searchParams.get('client_code')
+
+  let query = db
+    .from('shipments')
+    .select('*, client:clients(name, whatsapp)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (poolId) query = query.eq('pool_id', poolId)
+  if (clientCode) query = query.eq('client_code', clientCode)
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ shipments: data ?? [] })
+}

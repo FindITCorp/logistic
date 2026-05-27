@@ -163,6 +163,9 @@ export default function AdminPage() {
           <a href="/admin/proveedores" className="flex items-center gap-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 px-3 py-1.5 text-xs font-medium text-purple-400 transition-colors">
             <Truck className="w-3.5 h-3.5" /> Proveedores
           </a>
+          <a href="/admin/envios" className="flex items-center gap-1.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition-colors">
+            <Package className="w-3.5 h-3.5" /> Todos los envíos
+          </a>
         </div>
 
         {/* Tabs */}

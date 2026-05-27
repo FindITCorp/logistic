@@ -10,6 +10,8 @@ const schema = z.object({
   monthly_volume_m3: z.number().positive().optional(),
   product_type: z.string().optional(),
   notes: z.string().optional(),
+  pool_id: z.string().uuid().optional(),
+  source: z.string().optional(),
 })
 
 async function notifyViaGitHubIssue(lead: Record<string, unknown>) {

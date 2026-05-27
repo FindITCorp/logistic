@@ -30,6 +30,9 @@ export default function Header() {
           <a href={`${prefix}/seguimiento`} className="hover:text-slate-900 transition-colors">
             {t('tracking')}
           </a>
+          <a href={`${prefix}/factura/estado`} className="hover:text-slate-900 transition-colors">
+            Mi factura
+          </a>
         </nav>
 
         <div className="flex items-center gap-3">

@@ -2,11 +2,36 @@ import { useTranslations, useLocale } from 'next-intl';
 import Header from '@/components/Header';
 import LeadCaptureSection from '@/components/LeadCaptureSection';
 import SavingsCalculator from '@/components/SavingsCalculator';
+import { createServerClient } from '@/lib/supabase/client';
 
-function HeroSection() {
+async function getLiveStats() {
+  try {
+    const db = createServerClient();
+    const [{ data: pools }, { count: clients }] = await Promise.all([
+      db.from('pools').select('current_volume_m3, participants, carrier_rate').eq('status', 'active'),
+      db.from('clients').select('id', { count: 'exact', head: true }),
+    ]);
+    const activePools = pools ?? [];
+    const totalVol = activePools.reduce((s, p) => s + (p.current_volume_m3 ?? 0), 0);
+    const bestRate = activePools.length > 0
+      ? Math.min(...activePools.map(p => p.carrier_rate ?? 100))
+      : 82;
+    return {
+      pools: activePools.length,
+      volume: +totalVol.toFixed(1),
+      clients: clients ?? 0,
+      bestRate: +bestRate.toFixed(0),
+    };
+  } catch {
+    return { pools: 3, volume: 27, clients: 0, bestRate: 82 };
+  }
+}
+
+async function HeroSection() {
   const t = useTranslations('hero');
   const locale = useLocale();
   const prefix = locale === 'es' ? '' : `/${locale}`;
+  const stats = await getLiveStats();
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600 py-24 text-white">
@@ -17,7 +42,7 @@ function HeroSection() {
       <div className="container relative text-center">
         {/* Urgency badge */}
         <span className="inline-block rounded-full border border-amber-300/50 bg-amber-500/20 px-4 py-1.5 text-sm font-semibold text-amber-200 backdrop-blur-sm mb-3">
-          🚢 Piloto abierto — cupos limitados para Mayo 2026
+          🚢 Piloto abierto — cupos limitados para Junio 2026
         </span>
 
         <span className="block mt-3 rounded-full border border-blue-300/40 bg-white/10 px-4 py-1.5 text-sm font-medium text-blue-100 backdrop-blur-sm mx-auto w-fit">
@@ -36,22 +61,31 @@ function HeroSection() {
           {t('subtitle')}
         </p>
 
-        {/* Social proof mini-stats */}
+        {/* Live social proof stats */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm">
           <div className="flex items-center gap-2 text-blue-200">
-            <span className="text-2xl font-bold text-white">3</span>
-            <span>pools activos</span>
+            <span className="text-2xl font-bold text-white">{stats.pools}</span>
+            <span>pools activos ahora</span>
           </div>
           <div className="h-4 w-px bg-white/20 hidden sm:block" />
           <div className="flex items-center gap-2 text-blue-200">
-            <span className="text-2xl font-bold text-emerald-300">$82–98</span>
-            <span>por m³ vs $400–800 mercado</span>
+            <span className="text-2xl font-bold text-emerald-300">${stats.bestRate}–$252</span>
+            <span>por m³ vs $420–600 mercado</span>
           </div>
           <div className="h-4 w-px bg-white/20 hidden sm:block" />
           <div className="flex items-center gap-2 text-blue-200">
-            <span className="text-2xl font-bold text-white">10 días</span>
-            <span>por ciclo de pool</span>
+            <span className="text-2xl font-bold text-white">{stats.volume > 0 ? `${stats.volume} m³` : '10 días'}</span>
+            <span>{stats.volume > 0 ? 'consolidados hoy' : 'por ciclo de pool'}</span>
           </div>
+          {stats.clients > 0 && (
+            <>
+              <div className="h-4 w-px bg-white/20 hidden sm:block" />
+              <div className="flex items-center gap-2 text-blue-200">
+                <span className="text-2xl font-bold text-white">{stats.clients}</span>
+                <span>clientes registrados</span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -91,7 +125,7 @@ function PainPointSection() {
             </div>
           </div>
           <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-5">
-            <p className="text-3xl font-extrabold text-emerald-600">$180–250</p>
+            <p className="text-3xl font-extrabold text-emerald-600">$180–252</p>
             <p className="text-sm text-emerald-700 font-medium mt-1">FINDIT pool consolidado</p>
             <p className="text-xs text-slate-500 mt-1">precio que baja según volumen del pool</p>
           </div>
