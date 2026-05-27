@@ -28,9 +28,21 @@ export default function AdminPage() {
     client_code: '',
     weight_kg: '',
     volume_m3: '',
+    length_cm: '',
+    width_cm: '',
+    height_cm: '',
+    product_description: '',
+    declared_value_usd: '',
     origin_city: 'guangzhou' as 'shanghai' | 'guangzhou' | 'shenzhen',
     supplier_tracking: '',
   })
+  function calcVolume() {
+    const l = parseFloat(form.length_cm), w = parseFloat(form.width_cm), h = parseFloat(form.height_cm)
+    if (l > 0 && w > 0 && h > 0) {
+      const m3 = +((l * w * h) / 1_000_000).toFixed(4)
+      setForm(f => ({ ...f, volume_m3: String(m3) }))
+    }
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ShipmentResult | null>(null)
@@ -62,6 +74,11 @@ export default function AdminPage() {
           client_code: form.client_code.toUpperCase(),
           weight_kg: parseFloat(form.weight_kg),
           volume_m3: parseFloat(form.volume_m3),
+          length_cm: form.length_cm ? parseFloat(form.length_cm) : undefined,
+          width_cm: form.width_cm ? parseFloat(form.width_cm) : undefined,
+          height_cm: form.height_cm ? parseFloat(form.height_cm) : undefined,
+          product_description: form.product_description || undefined,
+          declared_value_usd: form.declared_value_usd ? parseFloat(form.declared_value_usd) : undefined,
           origin_city: form.origin_city,
           supplier_tracking: form.supplier_tracking || undefined,
         }),
@@ -69,7 +86,7 @@ export default function AdminPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setResult(data)
-      setForm({ client_code: '', weight_kg: '', volume_m3: '', origin_city: 'guangzhou', supplier_tracking: '' })
+      setForm({ client_code: '', weight_kg: '', volume_m3: '', length_cm: '', width_cm: '', height_cm: '', product_description: '', declared_value_usd: '', origin_city: 'guangzhou', supplier_tracking: '' })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al registrar')
     } finally {
@@ -266,15 +283,28 @@ export default function AdminPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Volumen (m³) *</label>
-              <input
-                type="number"
-                step="0.001"
-                required
-                value={form.volume_m3}
-                onChange={(e) => setForm({ ...form, volume_m3: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                placeholder="0.250"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.001"
+                  required
+                  value={form.volume_m3}
+                  onChange={(e) => setForm({ ...form, volume_m3: e.target.value })}
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                  placeholder="0.250"
+                />
+                <button type="button" onClick={calcVolume} className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 rounded-lg transition-colors whitespace-nowrap">Auto m³</button>
+              </div>
+              {/* Dimensions for auto-calculate */}
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {[['length_cm','L (cm)'],['width_cm','An (cm)'],['height_cm','Al (cm)']].map(([field,label]) => (
+                  <input key={field} type="number" step="0.1" placeholder={label}
+                    value={form[field as keyof typeof form]}
+                    onChange={e => setForm({...form, [field]: e.target.value})}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 text-xs"
+                  />
+                ))}
+              </div>
             </div>
           </div>
 

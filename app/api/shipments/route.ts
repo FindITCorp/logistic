@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import crypto from 'crypto'
 import { createServerClient } from '@/lib/supabase/client'
 import { getClientByCode } from '@/lib/clients'
 import { assignShipmentToPool, findBestPool } from '@/lib/poolAssignment'
@@ -8,8 +9,13 @@ const schema = z.object({
   client_code: z.string().regex(/^FDT-\d{4}$/),
   weight_kg: z.number().positive(),
   volume_m3: z.number().positive(),
+  length_cm: z.number().positive().optional(),
+  width_cm: z.number().positive().optional(),
+  height_cm: z.number().positive().optional(),
+  product_description: z.string().max(300).optional(),
+  declared_value_usd: z.number().positive().optional(),
   origin_city: z.enum(['shanghai', 'guangzhou', 'shenzhen']),
-  supplier_tracking: z.string().optional(), // link to pre-registered order
+  supplier_tracking: z.string().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -24,6 +30,10 @@ export async function POST(req: NextRequest) {
 
     const db = createServerClient()
 
+    // Generate invoice upload token (valid 7 days)
+    const invoiceToken = crypto.randomBytes(24).toString('hex')
+    const invoiceTokenExp = new Date(Date.now() + 7 * 86400000).toISOString()
+
     // Register shipment arrival
     const { data: shipment, error } = await db
       .from('shipments')
@@ -32,8 +42,15 @@ export async function POST(req: NextRequest) {
         client_code: client.client_code,
         weight_kg: input.weight_kg,
         volume_m3: input.volume_m3,
+        length_cm: input.length_cm ?? null,
+        width_cm: input.width_cm ?? null,
+        height_cm: input.height_cm ?? null,
+        product_description: input.product_description ?? null,
+        declared_value: input.declared_value_usd ?? null,
         origin_city: input.origin_city,
         status: 'received',
+        invoice_token: invoiceToken,
+        invoice_token_exp: invoiceTokenExp,
       })
       .select()
       .single()
