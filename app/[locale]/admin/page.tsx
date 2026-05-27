@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ScanLine, CheckCircle, AlertCircle, Package, MessageCircle, PlusCircle, Truck, Users } from 'lucide-react'
+import { ScanLine, CheckCircle, AlertCircle, Package, MessageCircle, PlusCircle, Truck, Users, BarChart3, LogOut } from 'lucide-react'
 import { buildWhatsAppLink, buildAssignmentMessage, buildArrivalMessage } from '@/lib/notifications'
 
 interface Provider {
@@ -130,18 +130,30 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-12">
       <div className="max-w-xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-blue-500/10 p-2 rounded-xl">
-            <ScanLine className="text-blue-400 w-6 h-6" />
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-500/10 p-2 rounded-xl">
+              <ScanLine className="text-blue-400 w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Panel Operador</h1>
+              <p className="text-gray-400 text-sm">Gestión de operaciones FINDIT</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Panel Operador</h1>
-            <p className="text-gray-400 text-sm">Gestión de operaciones FINDIT</p>
-          </div>
+          <button
+            onClick={async () => { await fetch('/api/admin/auth', { method: 'DELETE' }); window.location.href = '/admin/login' }}
+            className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+            title="Cerrar sesión"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Quick links */}
         <div className="flex gap-2 mb-4 flex-wrap">
+          <a href="/admin/dashboard" className="flex items-center gap-1.5 rounded-lg bg-gray-700/40 hover:bg-gray-700/60 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors">
+            <BarChart3 className="w-3.5 h-3.5" /> Dashboard
+          </a>
           <a href="/admin/pools" className="flex items-center gap-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition-colors">
             <Package className="w-3.5 h-3.5" /> Gestión de pools
           </a>

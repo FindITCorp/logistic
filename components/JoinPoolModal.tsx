@@ -17,7 +17,9 @@ export default function JoinPoolModal({ pool, clientPrice, onClose }: JoinPoolMo
   const [contact, setContact] = useState('');
   const [volume, setVolume] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState('');
 
   function validate() {
     const e: Record<string, string> = {};
@@ -27,11 +29,42 @@ export default function JoinPoolModal({ pool, clientPrice, onClose }: JoinPoolMo
     return e;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    setSubmitted(true);
+
+    setLoading(true);
+    setApiError('');
+
+    try {
+      // 1. Register the lead
+      const isEmail = contact.includes('@');
+      const leadRes = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          whatsapp: isEmail ? undefined : contact.trim(),
+          email: isEmail ? contact.trim() : undefined,
+          monthly_volume_m3: parseFloat(volume),
+          origin_city: pool.origin,
+          pool_id: pool.id,
+          source: 'join_modal',
+        }),
+      });
+
+      if (!leadRes.ok) {
+        const d = await leadRes.json();
+        throw new Error(d.error ?? 'Error al registrar');
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Error. Inténtalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -117,11 +150,23 @@ export default function JoinPoolModal({ pool, clientPrice, onClose }: JoinPoolMo
                 {errors.volume && <p className="mt-1 text-xs text-red-500">{errors.volume}</p>}
               </div>
 
+              {apiError && (
+                <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {apiError}
+                </p>
+              )}
+
               <button
                 type="submit"
-                className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors mt-2"
+                disabled={loading}
+                className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors mt-2 flex items-center justify-center gap-2"
               >
-                {t('submit')}
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Enviando...
+                  </>
+                ) : t('submit')}
               </button>
 
               <p className="text-xs text-center text-slate-400">{t('disclaimer')}</p>
