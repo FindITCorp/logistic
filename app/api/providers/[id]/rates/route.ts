@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken } from '@/lib/adminAuth'
 
 const schema = z.object({
   origin_city: z.enum(['shanghai', 'guangzhou', 'shenzhen']),
@@ -11,6 +12,9 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const input = schema.parse(body)
@@ -28,6 +32,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   const rateId = req.nextUrl.searchParams.get('rate_id')
   if (!rateId) return NextResponse.json({ error: 'rate_id requerido' }, { status: 400 })
   const db = createServerClient()

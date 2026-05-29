@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken } from '@/lib/adminAuth'
 import type { PoolStatus, ShipmentStatus } from '@/lib/supabase/database.types'
 
 // Valid forward-only transitions
@@ -25,6 +26,9 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest, { params }: { params: { pool_number: string } }) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const input = schema.parse(body)

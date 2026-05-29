@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
 import { verifyAdminToken, requireAdmin } from '@/lib/adminAuth'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 const schema = z.object({
   name: z.string().min(2),
@@ -40,6 +41,10 @@ async function notifyViaGitHubIssue(lead: Record<string, unknown>) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, 'leads', 5, 60_000) // 5 per minute per IP
+  if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
   try {
     const body = await req.json()
     const input = schema.parse(body)

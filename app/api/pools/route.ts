@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken } from '@/lib/adminAuth'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest) {
@@ -24,6 +25,9 @@ const createSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const input = createSchema.parse(body)
@@ -56,6 +60,9 @@ const updateSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const { pool_id, status } = updateSchema.parse(body)

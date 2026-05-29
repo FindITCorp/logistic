@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken } from '@/lib/adminAuth'
 import { getCarrierRate, calculateClientPrice } from '@/lib/pricing'
 
 const schema = z.object({ pool_id: z.string().uuid() })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const { pool_id } = schema.parse(body)

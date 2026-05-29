@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
+import { verifyAdminToken } from '@/lib/adminAuth'
 
 const updateSchema = z.object({
   invoice_received: z.boolean().optional(),
@@ -25,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await verifyAdminToken(req)
+  if (!session) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
   try {
     const body = await req.json()
     const input = updateSchema.parse(body)
