@@ -220,40 +220,40 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 19 de mayo de 2026
-**Fase:** 🟢 MVP TÉCNICO LISTO Y DEPLOYADO
+**Fecha:** 29 de mayo de 2026
+**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN
 **Sitio:** https://logistic-six-alpha.vercel.app — deploy automático desde `main` vía GitHub Actions
-**Validación operativa:** 🔴 POR COMENZAR
+**Validación operativa:** 🟡 LISTA PARA COMENZAR
 **Capital:** NO INVERTIDO AÚN
 
-### Últimos cambios deployados:
-- ✅ Modal "Unirme al pool" (JoinPoolModal.tsx) — formulario completo
-- ✅ Sistema de captura de leads — /api/leads + admin CRM en /admin/leads
-- ✅ SavingsCalculator.tsx — calculadora interactiva con sliders de volumen y día
-- ✅ Landing mejorada — sección pain-point ($500 vs $82), badge de urgencia, social proof
-- ✅ API de leads robusta — fallback a GitHub Issue si Supabase falla (ningún lead se pierde)
-- ✅ Migraciones Supabase corridas via GitHub Actions (setup.yml)
-- ✅ Env vars de Vercel configuradas (NEXT_PUBLIC_SUPABASE_URL, ANON_KEY, SERVICE_ROLE_KEY)
-- ✅ URL LIVE: https://logistic-six-alpha.vercel.app
-- ✅ docs/china-partners.md — lista de forwarders en China para contactar
+### Sistema en producción (29 mayo 2026):
+- ✅ Auth admin completa — login seguro en /admin/login (httpOnly cookie 24h)
+- ✅ Dashboard KPIs — /admin/dashboard con revenue, pools, facturas pendientes
+- ✅ Gestión de envíos — /admin/envios con filtros y acción WhatsApp
+- ✅ Estado de facturas para clientes — /factura/estado (búsqueda por código FDT)
+- ✅ JoinPoolModal conectado a DB — leads se guardan en Supabase (bug corregido)
+- ✅ Landing con stats en vivo — HeroSection lee datos reales de Supabase
+- ✅ Seguridad: RLS en todas las tablas, rate limiting en endpoints públicos
+- ✅ Rate limiting — 5 req/min en /api/leads, protección en endpoints clave
+- ✅ Migraciones 001-011 aplicadas en producción
+- ✅ Bucket Supabase Storage `invoices` creado (PDF/JPG/PNG, 5MB)
+- ✅ Env vars en Vercel: ADMIN_SETUP_KEY, CRON_SECRET, NEXT_PUBLIC_SITE_URL
+- ✅ GitHub Secrets: ADMIN_SETUP_KEY, CRON_SECRET, VERCEL_TOKEN
+- ✅ Cuenta admin creada: enrique.eaguilarh@gmail.com / Findit2026!
+- ✅ Next.js 14.2.29 (parche CVE crítico aplicado)
 
-### Pendiente técnico:
-- Verificar /api/health devuelva ok:true en producción (confirmar que migración de leads corrió)
-- Agregar GITHUB_TOKEN_NOTIFY en Vercel env vars para que el fallback de leads funcione
-- Conectar formulario "Unirme al pool" a Supabase (actualmente muestra confirmación mock)
+### Páginas del sistema (19 páginas):
+**Públicas:** /, /pools, /pools/[pool_number], /pools/unirme, /registro, /mis-pedidos, /seguimiento, /factura/[token], /factura/estado
+**Admin:** /admin, /admin/dashboard, /admin/login, /admin/leads, /admin/pools, /admin/pools/[id], /admin/pools/[id]/aduana, /admin/proveedores, /admin/envios
 
-### Supabase DB — Estado de migraciones (actualizado 19 mayo 2026):
-- Todas las migraciones (001-005) aplicadas ✅ vía GitHub Actions
-- Tablas en producción: clients, pools, shipments, pool_members, orders, providers, provider_rates, leads
-- _migrations tracking table: activa
-- GitHub Action: `.github/workflows/migrate.yml` — usa Management API HTTPS (bypasa IP allowlist)
-- Script: `.github/scripts/migrate.py` — Python + curl, detecta objetos ya existentes
-- Para correr SQL ad-hoc: GitHub Actions → "Run SQL Query (Manual)" workflow
+### Supabase DB — Migraciones aplicadas:
+- 001-011 ✅ todas aplicadas vía GitHub Actions
+- Tablas: clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log
+- RLS activo en todas las tablas (service_role bypass automático)
 
-### Próximas mejoras de negocio:
-- Contactar los 3-5 forwarders top de docs/china-partners.md para validar tarifas reales
-- Lanzar campaña en grupos de Facebook/WhatsApp de importadores panameños
-- Ver docs/promo-plan.md para plantillas de mensajes listas
+### Pendiente técnico (menor):
+- Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
+- Probar flujo completo E2E: registro → envío → factura → aduana
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
