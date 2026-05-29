@@ -25,8 +25,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           echo "=== Vercel account ==="
-          WHOAMI=$(npx vercel whoami --token=$VERCEL_TOKEN 2>&1 || true)
-          echo "$WHOAMI"
+          npx vercel whoami --token=$VERCEL_TOKEN 2>&1 || true
 
           echo "=== Deploying ==="
           DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
@@ -36,22 +35,10 @@ jobs:
           echo "=== DEPLOYED URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
 
-          # Get actual project domains from Vercel API
-          echo "=== Project domains ==="
-          PROJECT_INFO=$(curl -s "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null || true)
-          echo "$PROJECT_INFO" | python3 -c "
-import json,sys
-try:
-  d=json.load(sys.stdin)
-  aliases = d.get('alias',[])
-  for a in aliases:
-    print('  domain:', a.get('domain',''))
-  print('  name:', d.get('name',''))
-  print('  id:', d.get('id',''))
-except: pass
-" 2>/dev/null || true
-          echo "domains_raw=$PROJECT_INFO" >> $GITHUB_OUTPUT
+          echo "=== Project domains from API ==="
+          curl -sf "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | jq -r '.domains[].name' 2>/dev/null || echo "no domains or API unreachable"
 
       - name: Post URL as commit comment
         if: always()
@@ -62,21 +49,10 @@ except: pass
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-
-          # Also get real domains via API
-          DOMAINS=$(curl -s "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/domains?teamId=$VERCEL_ORG_ID" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" 2>/dev/null | \
-            python3 -c "
-import json,sys
-try:
-  d=json.load(sys.stdin)
-  for dom in d.get('domains',[]):
-    print(dom.get('name',''))
-except: pass
-" 2>/dev/null || echo "")
-
-          MSG="Deployed!\n\nURL from CLI: $URL\nDomains from API:\n$DOMAINS"
-
+          DOMAINS=$(curl -sf "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | jq -r '.domains[].name' 2>/dev/null | tr '\n' ' ' || echo "unknown")
+          MSG="Deployed!\n\nCLI URL: ${URL}\nProject domains: ${DOMAINS}"
           curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
             -H "Authorization: Bearer $GH_TOKEN" \
