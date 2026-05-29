@@ -24,38 +24,19 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          echo "=== Vercel account ==="
-          npx vercel whoami --token=$VERCEL_TOKEN 2>&1 || true
-
-          echo "=== Deploying ==="
           DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
           echo "$DEPLOY_OUT"
-
           URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | grep -v "vercel\.app/docs" | tail -1)
-          echo "=== DEPLOYED URL: $URL ==="
+          echo "=== URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
-
-          echo "=== Project domains from API ==="
-          curl -sf "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains?teamId=${VERCEL_ORG_ID}" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | jq -r '.domains[].name' 2>/dev/null || echo "no domains or API unreachable"
 
       - name: Post URL as commit comment
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           URL="${{ steps.deploy.outputs.url }}"
-          DOMAINS=$(curl -sf "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains?teamId=${VERCEL_ORG_ID}" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | jq -r '.domains[].name' 2>/dev/null | tr '\n' ' ' || echo "unknown")
-          LATEST_DEP=$(curl -sf "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&limit=1&target=production" \
-            -H "Authorization: Bearer $VERCEL_TOKEN" \
-            | jq -r '.deployments[0] | "url:\(.url) state:\(.state) ready:\(.readyState)"' 2>/dev/null || echo "unknown")
-          MSG="Deployed!\n\nCLI URL: ${URL}\nProject domains: ${DOMAINS}\nLatest deployment: ${LATEST_DEP}"
+          MSG="${URL:-Deploy completado — ver logs}"
           curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
             -H "Authorization: Bearer $GH_TOKEN" \

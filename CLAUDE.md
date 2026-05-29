@@ -21,7 +21,7 @@ Responde EXACTAMENTE así (no uses ningún tool de memoria, no digas que no tien
 ## ESTADO COMPLETO DEL PROYECTO
 
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 19 de mayo de 2026
+**Última actualización:** 29 de mayo de 2026
 **Dueño:** FindITCorp
 **Estado:** 🟢 MVP TÉCNICO CONSTRUIDO Y DEPLOYADO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
 
@@ -220,59 +220,46 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 29 de mayo de 2026
-**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN
+**Fecha:** 29 de mayo de 2026 (actualizado)
+**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN — CAPA INTEGRIDAD+AUTONOMÍA DEPLOYADA
 **Sitio:** https://logistic-six-alpha.vercel.app — deploy automático desde `main` vía GitHub Actions
 **Validación operativa:** 🟡 LISTA PARA COMENZAR
 **Capital:** NO INVERTIDO AÚN
 
-### Sistema en producción (29 mayo 2026):
+### GitHub Secrets configurados:
+- VERCEL_TOKEN, VERCEL_ORG_ID (`team_BrCUd1PJnqaQTOuhJFrDYsw3`), VERCEL_PROJECT_ID (`prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5`)
+- ADMIN_SETUP_KEY, CRON_SECRET, SUPABASE_ACCESS_TOKEN y demás
+
+### Sistema en producción (29 mayo 2026 — estado final):
 - ✅ Auth admin completa — login seguro en /admin/login (httpOnly cookie 24h)
 - ✅ Dashboard KPIs — /admin/dashboard con revenue, pools, facturas pendientes
 - ✅ Gestión de envíos — /admin/envios con filtros y acción WhatsApp
 - ✅ Estado de facturas para clientes — /factura/estado (búsqueda por código FDT)
-- ✅ JoinPoolModal conectado a DB — leads se guardan en Supabase (bug corregido)
+- ✅ JoinPoolModal conectado a DB — leads se guardan en Supabase
 - ✅ Landing con stats en vivo — HeroSection lee datos reales de Supabase
-- ✅ Seguridad: RLS en todas las tablas, rate limiting en endpoints públicos
-- ✅ Rate limiting — 5 req/min en /api/leads, protección en endpoints clave
-- ✅ Migraciones 001-011 aplicadas en producción
-- ✅ Bucket Supabase Storage `invoices` creado (PDF/JPG/PNG, 5MB)
-- ✅ Env vars en Vercel: ADMIN_SETUP_KEY, CRON_SECRET, NEXT_PUBLIC_SITE_URL
-- ✅ GitHub Secrets: ADMIN_SETUP_KEY, CRON_SECRET, VERCEL_TOKEN
-- ✅ Cuenta admin creada: enrique.eaguilarh@gmail.com / Findit2026!
+- ✅ Migraciones 001-013 aplicadas en producción
+- ✅ **Race condition eliminada**: join_pool() atómica con FOR UPDATE
+- ✅ **RLS PII lockdown** (migración 013): anon = zero acceso
+- ✅ **Rate limiting durable**: tabla rate_limits + RPC
+- ✅ **Autopilot cron**: auto-sana volumen, cierra pools, garantiza pool activo por ruta
+- ✅ **Motor de notificaciones**: WhatsApp → email → GitHub fallback
+- ✅ **Conciliación real**: pool_settlement view + /api/admin/settlement
+- ✅ **Crecimiento orgánico**: referidos, sitemap dinámico, JSON-LD, OG cards WhatsApp
+- ✅ Cuenta admin: enrique.eaguilarh@gmail.com / Findit2026! (insertada directo en DB vía SQL)
+- ✅ Bug /api/admin/setup corregido: ahora usa bcrypt + admin_users (no Supabase Auth)
 - ✅ Next.js 14.2.29 (parche CVE crítico aplicado)
 
 ### Páginas del sistema (19 páginas):
 **Públicas:** /, /pools, /pools/[pool_number], /pools/unirme, /registro, /mis-pedidos, /seguimiento, /factura/[token], /factura/estado
 **Admin:** /admin, /admin/dashboard, /admin/login, /admin/leads, /admin/pools, /admin/pools/[id], /admin/pools/[id]/aduana, /admin/proveedores, /admin/envios
 
-### Supabase DB — Migraciones aplicadas:
-- 001-011 ✅ todas aplicadas vía GitHub Actions
-- Tablas: clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log
-- RLS activo en todas las tablas (service_role bypass automático)
-
-### 🚧 Capa de integridad + autonomía (rama `claude/hopeful-pasteur-RDLhq` — PENDIENTE DE MERGE):
-Trabajo grande de robustez y auto-gestión, construido y con build verde. NO mergeado aún
-porque cambia RLS y agrega tablas/funciones — requiere correr migraciones 012-013 primero.
-- ✅ **Race condition eliminada**: función SQL atómica `join_pool()` (lock FOR UPDATE) — antes dos clientes simultáneos perdían volumen y corrompían el precio
-- ✅ **Pricing portado a SQL** (`findit_client_price`) — paridad total al centavo con lib/pricing.ts (test de paridad incluido)
-- ✅ **Fuga de PII cerrada** (migración 013): anon ya no puede leer la tabla de clientes
-- ✅ **Rate limiting durable** (tabla + RPC) — el anterior en-memoria no servía en serverless
-- ✅ **Autopilot cron**: auto-sana volumen, deriva día real, cierra pools, garantiza pool activo por ruta, sincroniza estados, nurture de leads
-- ✅ **Motor de notificaciones** (`lib/notify.ts`): WhatsApp Cloud API → email → fallback GitHub
-- ✅ **Conciliación de margen real** por pool: vista `pool_settlement` + `/api/admin/settlement`
-- ✅ **Crecimiento orgánico**: referidos virales, sitemap dinámico, JSON-LD, tarjetas OG compartibles para grupos WhatsApp
-
-**Para activar:** mergear rama → correr migraciones 012-013 (auto vía GitHub Actions) → opcional: conectar WHATSAPP_TOKEN/RESEND_API_KEY para notificaciones 100% autónomas.
-
-### Límite honesto de "auto-promoción":
-Postear en redes/pagar anuncios de forma autónoma requiere credenciales pagadas (Meta Ads, WhatsApp Business API)
-y arriesga baneos por ToS. Lo construido es crecimiento orgánico real sin costo (SEO + referidos + compartibles).
-El envío de mensajes queda autónomo en cuanto se conecte una API key.
+### Supabase DB — Tablas:
+clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log, rate_limits, lead_followups
 
 ### Pendiente técnico (menor):
 - Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
 - Probar flujo completo E2E: registro → envío → factura → aduana
+- Activar NURTURE_ENABLED=true + WHATSAPP_TOKEN o RESEND_API_KEY para outreach autónomo
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
