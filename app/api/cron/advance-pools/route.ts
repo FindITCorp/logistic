@@ -1,99 +1,167 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/client'
 import { calculateClientPrice } from '@/lib/pricing'
+import { notify } from '@/lib/notify'
+import type { OriginCity } from '@/lib/supabase/database.types'
 
-// Vercel Cron: runs daily at 00:00 UTC
-// vercel.json: { "crons": [{ "path": "/api/cron/advance-pools", "schedule": "0 0 * * *" }] }
+// ─── FINDIT Autopilot ─────────────────────────────────────────────────────────
+// Daily self-management cron (Vercel Cron 00:00 UTC). Runs the whole operation
+// without human intervention:
+//   1. Self-heal pool volume drift (recompute from members)
+//   2. Advance pool day (derived from opened_at — robust against missed runs)
+//   3. Close pools past day 10 and lock final member prices
+//   4. Guarantee every origin always has one active pool to join
+//   5. Sync shipment lifecycle status to pool status
+//   6. Process due lead follow-ups (autonomous nurture)
+// Protected by CRON_SECRET.
+
+const ORIGINS: OriginCity[] = ['shanghai', 'guangzhou', 'shenzhen']
+const DAY_MS = 86_400_000
+
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS)
+}
+
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const db = createServerClient()
   const now = new Date().toISOString()
-  const results: string[] = []
+  const report: Record<string, string[]> = {
+    healed: [], advanced: [], closed: [], created: [], synced: [], nurtured: [],
+  }
 
-  // 1. Fetch all active pools
-  const { data: activePools, error } = await db
-    .from('pools')
-    .select('*')
-    .eq('status', 'active')
-
+  // ── 1+2+3. Active pools: self-heal, advance day, close if expired ──────────
+  const { data: activePools, error } = await db.from('pools').select('*').eq('status', 'active')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   for (const pool of activePools ?? []) {
-    const newDay = pool.day_number + 1
+    try {
+      // Self-heal: recompute volume + participants from the member ledger.
+      await db.rpc('recompute_pool_volume', { p_pool_id: pool.id })
 
-    if (newDay > 10) {
-      // Pool expired — close it and auto-recalculate final prices
-      await db.from('pools').update({ status: 'closed' }).eq('id', pool.id)
+      // Derive the true day from opened_at (resilient to missed/double runs).
+      const openedAt = pool.opened_at ?? pool.created_at
+      const trueDay = Math.min(daysSince(openedAt) + 1, 11)
 
-      // Recalculate and lock in final prices for each pool_member
-      const { data: members } = await db
-        .from('pool_members')
-        .select('*')
-        .eq('pool_id', pool.id)
+      if (trueDay > 10) {
+        // Expired → close and lock final prices at the final pool volume.
+        const { data: fresh } = await db.from('pools').select('current_volume_m3').eq('id', pool.id).single()
+        const finalVolume = fresh?.current_volume_m3 ?? pool.current_volume_m3
 
-      for (const member of members ?? []) {
-        const { clientPrice } = calculateClientPrice(
-          member.day_joined ?? 1,
-          pool.current_volume_m3,
-        )
-        await db
-          .from('pool_members')
-          .update({ price_per_m3: clientPrice, locked_at: now })
-          .eq('id', member.id)
-        await db
-          .from('shipments')
-          .update({ price_per_m3: clientPrice })
-          .eq('id', member.shipment_id)
+        await db.from('pools').update({ status: 'closed' }).eq('id', pool.id)
+
+        const { data: members } = await db.from('pool_members').select('*').eq('pool_id', pool.id)
+        for (const m of members ?? []) {
+          const { clientPrice } = calculateClientPrice(m.day_joined ?? 1, finalVolume)
+          await db.from('pool_members').update({ price_per_m3: clientPrice, locked_at: now }).eq('id', m.id)
+          await db.from('shipments').update({ price_per_m3: clientPrice }).eq('id', m.shipment_id)
+        }
+        report.closed.push(`#${pool.pool_number} (${members?.length ?? 0} miembros, ${finalVolume}m³)`)
+      } else if (trueDay !== pool.day_number) {
+        await db.from('pools').update({ day_number: trueDay }).eq('id', pool.id)
+        report.advanced.push(`#${pool.pool_number} → día ${trueDay}`)
       }
-
-      results.push(`Pool #${pool.pool_number} closed (was day ${pool.day_number})`)
-    } else {
-      // Advance day counter and recalculate carrier_rate at new volume
-      const { clientPrice } = calculateClientPrice(1, pool.current_volume_m3)
-      await db
-        .from('pools')
-        .update({ day_number: newDay, carrier_rate: clientPrice })
-        .eq('id', pool.id)
-
-      results.push(`Pool #${pool.pool_number} → day ${newDay}`)
+    } catch (e) {
+      report.healed.push(`ERROR #${pool.pool_number}: ${e instanceof Error ? e.message : 'desconocido'}`)
     }
   }
 
-  // 2. Auto-create replacement pools for origins that went from active→closed
-  const { data: originsClosed } = await db
-    .from('pools')
-    .select('origin_city')
-    .eq('status', 'closed')
-    .gte('updated_at', new Date(Date.now() - 86400000).toISOString())
-
-  const closedOrigins = new Set((originsClosed ?? []).map((p) => p.origin_city))
-
-  for (const origin of closedOrigins) {
-    // Check if there's already an active pool for this origin
-    const { data: existing } = await db
+  // ── 4. Guarantee one active pool per origin ────────────────────────────────
+  for (const origin of ORIGINS) {
+    const { count } = await db
       .from('pools')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('status', 'active')
       .eq('origin_city', origin)
-      .limit(1)
 
-    if (!existing || existing.length === 0) {
-      await db.from('pools').insert({
+    if ((count ?? 0) === 0) {
+      const { error: insErr } = await db.from('pools').insert({
         origin_city: origin,
-        destination_city: 'colon',
         status: 'active',
-        reference_price_m3: 100,
         current_volume_m3: 0,
         participants: 0,
         day_number: 1,
+        carrier_rate: 121,
+        opened_at: now,
       })
-      results.push(`Auto-created new pool for ${origin}`)
+      if (!insErr) report.created.push(`Nuevo pool ${origin}`)
     }
   }
 
-  return NextResponse.json({ ok: true, date: now, actions: results })
+  // ── 5. Sync shipment lifecycle to pool status ──────────────────────────────
+  const statusMap: Record<string, string> = {
+    in_transit: 'in_transit', at_tocumen: 'at_tocumen', completed: 'delivered',
+  }
+  const { data: movingPools } = await db
+    .from('pools')
+    .select('id, pool_number, status')
+    .in('status', ['in_transit', 'at_tocumen', 'completed'])
+  for (const pool of movingPools ?? []) {
+    const shipStatus = statusMap[pool.status]
+    if (!shipStatus) continue
+    const { count } = await db
+      .from('shipments')
+      .update({ status: shipStatus }, { count: 'exact' })
+      .eq('pool_id', pool.id)
+      .neq('status', shipStatus)
+    if ((count ?? 0) > 0) report.synced.push(`#${pool.pool_number}: ${count} envíos → ${shipStatus}`)
+  }
+
+  // ── 6. Autonomous lead nurture ─────────────────────────────────────────────
+  const { data: dueFollowups } = await db
+    .from('lead_followups')
+    .select('*, lead:leads(*)')
+    .eq('status', 'pending')
+    .lte('due_at', now)
+    .limit(50)
+
+  for (const f of dueFollowups ?? []) {
+    const lead = f.lead as { id: string; name: string; whatsapp: string | null; email: string | null; origin_city: string | null; status: string } | null
+    if (!lead || lead.status === 'converted') {
+      await db.from('lead_followups').update({ status: 'skipped' }).eq('id', f.id)
+      continue
+    }
+    const { subject, body } = nurtureMessage(f.step, lead.name, lead.origin_city)
+    const res = await notify({ whatsapp: lead.whatsapp, email: lead.email, name: lead.name }, subject, body)
+    await db.from('lead_followups').update({
+      status: res.ok ? 'sent' : 'failed',
+      sent_at: res.ok ? now : null,
+    }).eq('id', f.id)
+    if (res.ok) {
+      await db.from('leads').update({ last_contacted_at: now }).eq('id', lead.id)
+      // Schedule next step (up to 3) if not yet contacted enough.
+      if (f.step < 3) {
+        await db.from('lead_followups').insert({
+          lead_id: lead.id, channel: 'whatsapp', step: f.step + 1,
+          due_at: new Date(Date.now() + (f.step === 1 ? 2 : 3) * DAY_MS).toISOString(),
+        })
+      }
+      report.nurtured.push(`Lead ${lead.name} (paso ${f.step}, ${res.channel})`)
+    }
+  }
+
+  return NextResponse.json({ ok: true, date: now, report })
+}
+
+function nurtureMessage(step: number, name: string, origin: string | null): { subject: string; body: string } {
+  const city = origin ? origin.charAt(0).toUpperCase() + origin.slice(1) : 'China'
+  if (step === 1) {
+    return {
+      subject: 'Tu ahorro en FINDIT te espera',
+      body: `Hola ${name} 👋 Gracias por tu interés en FINDIT.\n\nConsolidando tu carga ${city} → Panamá pagas desde $180/m³ — hasta 40% menos que un casillero ($420/m³).\n\n¿Cuánto volumen mueves al mes? Te armamos tu cotización.\n\n_FINDIT Logistics_`,
+    }
+  }
+  if (step === 2) {
+    return {
+      subject: 'Tu pool está por cerrar',
+      body: `Hola ${name} 👋 El pool ${city} → Panamá está sumando volumen. Mientras más rápido entras, mayor tu descuento (día 1 = 90% del ahorro).\n\nReserva tu espacio: https://logistic-six-alpha.vercel.app/registro\n\n_FINDIT Logistics_`,
+    }
+  }
+  return {
+    subject: 'Última llamada — ahorra hasta 40%',
+    body: `Hola ${name} 👋 Última oportunidad de este ciclo para consolidar ${city} → Panamá y ahorrar hasta 40% vs el casillero.\n\nEscríbenos y te ayudamos a empezar hoy.\n\n_FINDIT Logistics_`,
+  }
 }

@@ -12,6 +12,8 @@ export interface Client {
   email: string | null
   assignment_mode: AssignmentMode
   notify_by: NotifyBy
+  referral_code: string | null
+  referred_by_code: string | null
   created_at: string
 }
 
@@ -28,6 +30,7 @@ export interface Pool {
   provider_id: string | null
   reference_price_m3: number
   departure_date: string | null
+  opened_at: string | null
   created_at: string
   dispatched_at: string | null
   arrived_colon_at: string | null
@@ -68,6 +71,8 @@ export interface PoolMember {
   client_id: string
   volume_m3: number
   price_per_m3: number
+  day_joined: number | null
+  locked_at: string | null
   joined_at: string
 }
 

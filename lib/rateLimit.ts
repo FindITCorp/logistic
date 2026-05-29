@@ -1,35 +1,35 @@
-// Simple in-memory rate limiter (per serverless instance).
-// Limits by IP to prevent obvious abuse on public endpoints.
-// Not a substitute for WAF/CDN rate limiting in production.
+// Durable rate limiter backed by Postgres (function rate_limit_hit in 012).
+// Works across serverless instances — unlike an in-memory Map, which resets
+// per cold start and lets abuse through on Vercel. Fails OPEN on DB error so
+// a transient DB hiccup never blocks legitimate traffic.
 
-interface Entry { count: number; resetAt: number }
+import { createServerClient } from '@/lib/supabase/client'
 
-const store = new Map<string, Entry>()
-
-export function checkRateLimit(
+export async function checkRateLimit(
   ip: string,
   key: string,
   max: number,
   windowMs: number,
-): { allowed: boolean; remaining: number } {
-  const now = Date.now()
-  const storeKey = `${key}:${ip}`
-  let entry = store.get(storeKey)
-
-  if (!entry || now > entry.resetAt) {
-    entry = { count: 0, resetAt: now + windowMs }
-    store.set(storeKey, entry)
+): Promise<{ allowed: boolean }> {
+  try {
+    const db = createServerClient()
+    const { data, error } = await db.rpc('rate_limit_hit', {
+      p_key: `${key}:${ip}`,
+      p_max: max,
+      p_window_s: Math.ceil(windowMs / 1000),
+    })
+    if (error) return { allowed: true } // fail open
+    return { allowed: data === true }
+  } catch {
+    return { allowed: true } // fail open
   }
-
-  entry.count++
-  const allowed = entry.count <= max
-  return { allowed, remaining: Math.max(0, max - entry.count) }
 }
 
 export function getClientIp(req: Request): string {
+  const h = req.headers as Headers
   return (
-    (req.headers as Headers).get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    (req.headers as Headers).get('x-real-ip') ||
+    h.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    h.get('x-real-ip') ||
     'unknown'
   )
 }

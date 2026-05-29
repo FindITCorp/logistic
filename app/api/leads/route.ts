@@ -42,7 +42,7 @@ async function notifyViaGitHubIssue(lead: Record<string, unknown>) {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, 'leads', 5, 60_000) // 5 per minute per IP
+  const { allowed } = await checkRateLimit(ip, 'leads', 5, 60_000) // 5 per minute per IP
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   try {
@@ -55,6 +55,11 @@ export async function POST(req: NextRequest) {
       const { data, error } = await db.from('leads').insert(input).select().single()
       if (!error) {
         notifyViaGitHubIssue(input).catch(() => null) // async, don't block
+        // Seed the autonomous nurture sequence (step 1 in ~2h). Fire-and-forget.
+        db.from('lead_followups').insert({
+          lead_id: data.id, channel: 'whatsapp', step: 1,
+          due_at: new Date(Date.now() + 2 * 3600_000).toISOString(),
+        }).then(() => null, () => null)
         return NextResponse.json({ lead: data }, { status: 201 })
       }
       console.error('Supabase error:', error.message)

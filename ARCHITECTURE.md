@@ -136,9 +136,47 @@ Migrations: `001_initial_schema` → `011_security` (RLS + audit_log)
 
 ---
 
+## Integrity & Autonomy Layer (migrations 012–013)
+
+**Atomic pool join (`join_pool` SQL function).** Joining a pool is now a single
+transaction that `SELECT ... FOR UPDATE`-locks the pool row, recomputes volume +
+price serially, and writes the member/shipment/pool updates atomically. This
+eliminates the read-modify-write race that previously lost concurrent volume
+updates (and corrupted pricing). All three call sites (`/shipments/[id]/assign`,
+`/orders/[id]/join-pool`, `assignShipmentToPool`) go through it. Double-assignment
+is rejected (idempotent).
+
+**Authoritative SQL pricing.** `findit_carrier_rate()` and `findit_client_price()`
+port `lib/pricing.ts` to SQL so the price locked at join time is correct under
+concurrency. `tests/pricing-parity.spec.ts` fails if SQL and TS ever diverge.
+
+**Self-healing & reconciliation.** `recompute_pool_volume()` rebuilds a pool's
+volume/participants from the member ledger. `pool_settlement` view exposes real
+per-pool P&L (revenue vs carrier+overhead cost = margin). Surfaced at
+`GET /api/admin/settlement`.
+
+**Durable rate limiting.** `rate_limit_hit()` (atomic upsert on `rate_limits`)
+replaces the in-memory limiter, which was useless across Vercel's serverless
+instances. Fails open on DB error.
+
+**Autopilot cron (`/api/cron/advance-pools`).** Runs daily and self-manages:
+self-heals volume drift, derives pool day from `opened_at` (resilient to missed
+runs), closes expired pools and locks final prices, **guarantees one active pool
+per origin at all times**, syncs shipment lifecycle status, and processes the
+autonomous lead-nurture queue.
+
+**Notification dispatcher (`lib/notify.ts`).** One interface, auto-selected
+driver: WhatsApp Cloud API → Resend email → GitHub-Issue fallback (nothing is
+lost). Fully autonomous once a channel credential is set.
+
+**Viral growth.** `clients.referral_code` / `referred_by_code` (cliente trae
+cliente), `GET /api/referrals?code=`, dynamic `sitemap.xml` + `robots.txt`,
+JSON-LD (Organization/Service/FAQ) for rich results, and per-pool
+`opengraph-image` shareable cards for WhatsApp groups.
+
 ## Security Model
 
-- **RLS:** Enabled on all 13 tables (migration 011). `service_role` (server) bypasses RLS. `anon` key restricted to public read + client-facing inserts.
+- **RLS:** Migration 013 **revokes all anon access** (the old `using (true)` policies let anyone with the public anon key dump the clients table — names, WhatsApp, emails). Since 100% of the app reads/writes via `service_role` server-side, anon needs nothing. RLS enabled + zero anon policies = anon denied everything; `service_role` bypasses.
 - **Admin auth:** bcrypt password → session token in DB → httpOnly cookie or Bearer header. 24h TTL.
 - **Invoice upload:** Cryptographic 7-day token per shipment.
 - **Rate limiting:** `/api/leads` 5 req/min/IP · `/api/clients` 3 req/min/IP (in-memory, per instance).

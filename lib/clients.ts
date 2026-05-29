@@ -12,6 +12,7 @@ export interface RegisterClientInput {
   email?: string
   assignment_mode: AssignmentMode
   notify_by: NotifyBy
+  referred_by_code?: string
 }
 
 export async function registerClient(input: RegisterClientInput): Promise<Client> {
@@ -25,9 +26,11 @@ export async function registerClient(input: RegisterClientInput): Promise<Client
     client_code = generateClientCode()
   }
 
+  // referral_code = the client's own code (what they share). referred_by_code
+  // links to whoever invited them (viral growth loop).
   const { data, error } = await db
     .from('clients')
-    .insert({ ...input, client_code })
+    .insert({ ...input, client_code, referral_code: client_code })
     .select()
     .single()
 

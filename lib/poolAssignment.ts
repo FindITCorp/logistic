@@ -1,11 +1,48 @@
 import { createServerClient } from './supabase/client'
 import { getCarrierRate, calculateClientPrice, DEFAULT_VOLUME_TIERS, ProviderRate } from './pricing'
 import type { Pool, OriginCity } from './supabase/database.types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface AssignmentResult {
   pool: Pool
   pricePerM3: number
   reason: string
+}
+
+export interface JoinPoolResult {
+  price_per_m3: number
+  volume_after: number
+  pool_number: number
+  pool_id: string
+}
+
+/**
+ * Atomic, race-free pool join via the join_pool() SQL function (migration 012).
+ * Locks the pool row, recomputes volume + price serially, and writes the
+ * member + shipment + pool updates in a single transaction. Replaces the old
+ * read-modify-write pattern that silently lost concurrent volume updates.
+ */
+export async function joinPoolAtomic(
+  db: SupabaseClient,
+  poolId: string,
+  shipmentId: string,
+): Promise<{ data: JoinPoolResult | null; error: string | null }> {
+  const { data, error } = await db.rpc('join_pool', {
+    p_pool_id: poolId,
+    p_shipment_id: shipmentId,
+  })
+  if (error) return { data: null, error: error.message }
+  return { data: data as JoinPoolResult, error: null }
+}
+
+/** Translate join_pool() SQL exceptions into user-facing messages + HTTP status. */
+export function mapJoinError(raw: string): { message: string; status: number } {
+  if (raw.includes('POOL_NOT_FOUND')) return { message: 'Pool no encontrado', status: 404 }
+  if (raw.includes('POOL_CLOSED')) return { message: 'Este pool ya está cerrado', status: 400 }
+  if (raw.includes('SHIPMENT_NOT_FOUND')) return { message: 'Envío no encontrado', status: 404 }
+  if (raw.includes('SHIPMENT_ALREADY_ASSIGNED') || raw.includes('ALREADY_ASSIGNED'))
+    return { message: 'El envío ya fue asignado a un pool', status: 409 }
+  return { message: raw || 'Error al asignar el envío', status: 400 }
 }
 
 async function getProviderRates(
@@ -97,32 +134,9 @@ export async function assignShipmentToPool(shipmentId: string): Promise<Assignme
   const result = await findBestPool(shipment.origin_city, shipment.volume_m3)
   if (!result) throw new Error('No hay pools activos para esta ruta')
 
-  const { pool, pricePerM3 } = result
+  // Atomic assignment — serializes concurrent joins, no lost volume updates.
+  const { data, error } = await joinPoolAtomic(db, result.pool.id, shipmentId)
+  if (error) throw new Error(mapJoinError(error).message)
 
-  const providerRates: ProviderRate[] = pool.provider_id
-    ? await getProviderRates(db, pool.provider_id, shipment.origin_city)
-    : []
-
-  await db.from('shipments').update({
-    pool_id: pool.id,
-    status: 'assigned',
-    price_per_m3: pricePerM3,
-    assigned_at: new Date().toISOString(),
-  }).eq('id', shipmentId)
-
-  await db.from('pool_members').insert({
-    pool_id: pool.id,
-    shipment_id: shipmentId,
-    client_id: shipment.client_id,
-    volume_m3: shipment.volume_m3,
-    price_per_m3: pricePerM3,
-  })
-
-  await db.from('pools').update({
-    current_volume_m3: pool.current_volume_m3 + shipment.volume_m3,
-    participants: pool.participants + 1,
-    carrier_rate: getCarrierRate(pool.current_volume_m3 + shipment.volume_m3, providerRates),
-  }).eq('id', pool.id)
-
-  return result
+  return { ...result, pricePerM3: data!.price_per_m3 }
 }

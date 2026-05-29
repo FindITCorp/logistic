@@ -9,11 +9,12 @@ const schema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   assignment_mode: z.enum(['auto', 'manual']),
   notify_by: z.enum(['whatsapp', 'email', 'both']),
+  referred_by_code: z.string().regex(/^FDT-\d{4}$/).optional(),
 })
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, 'clients', 3, 60_000) // 3 registrations per minute per IP
+  const { allowed } = await checkRateLimit(ip, 'clients', 3, 60_000) // 3 registrations per minute per IP
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
   try {
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       email: input.email || undefined,
       assignment_mode: input.assignment_mode,
       notify_by: input.notify_by,
+      referred_by_code: input.referred_by_code || undefined,
     })
 
     return NextResponse.json({ client }, { status: 201 })

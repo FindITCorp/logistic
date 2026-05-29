@@ -251,6 +251,25 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - Tablas: clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log
 - RLS activo en todas las tablas (service_role bypass automático)
 
+### 🚧 Capa de integridad + autonomía (rama `claude/hopeful-pasteur-RDLhq` — PENDIENTE DE MERGE):
+Trabajo grande de robustez y auto-gestión, construido y con build verde. NO mergeado aún
+porque cambia RLS y agrega tablas/funciones — requiere correr migraciones 012-013 primero.
+- ✅ **Race condition eliminada**: función SQL atómica `join_pool()` (lock FOR UPDATE) — antes dos clientes simultáneos perdían volumen y corrompían el precio
+- ✅ **Pricing portado a SQL** (`findit_client_price`) — paridad total al centavo con lib/pricing.ts (test de paridad incluido)
+- ✅ **Fuga de PII cerrada** (migración 013): anon ya no puede leer la tabla de clientes
+- ✅ **Rate limiting durable** (tabla + RPC) — el anterior en-memoria no servía en serverless
+- ✅ **Autopilot cron**: auto-sana volumen, deriva día real, cierra pools, garantiza pool activo por ruta, sincroniza estados, nurture de leads
+- ✅ **Motor de notificaciones** (`lib/notify.ts`): WhatsApp Cloud API → email → fallback GitHub
+- ✅ **Conciliación de margen real** por pool: vista `pool_settlement` + `/api/admin/settlement`
+- ✅ **Crecimiento orgánico**: referidos virales, sitemap dinámico, JSON-LD, tarjetas OG compartibles para grupos WhatsApp
+
+**Para activar:** mergear rama → correr migraciones 012-013 (auto vía GitHub Actions) → opcional: conectar WHATSAPP_TOKEN/RESEND_API_KEY para notificaciones 100% autónomas.
+
+### Límite honesto de "auto-promoción":
+Postear en redes/pagar anuncios de forma autónoma requiere credenciales pagadas (Meta Ads, WhatsApp Business API)
+y arriesga baneos por ToS. Lo construido es crecimiento orgánico real sin costo (SEO + referidos + compartibles).
+El envío de mensajes queda autónomo en cuanto se conecte una API key.
+
 ### Pendiente técnico (menor):
 - Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
 - Probar flujo completo E2E: registro → envío → factura → aduana
