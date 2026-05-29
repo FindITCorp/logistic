@@ -20,13 +20,18 @@ jobs:
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: team_BrCUd1PJnqaQTOuhJFrDYsw3
-          VERCEL_PROJECT_ID: prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          echo "=== Vercel account ==="
+          npx vercel whoami --token=$VERCEL_TOKEN 2>&1 || true
+
+          echo "=== Deploying ==="
           DEPLOY_OUT=$(vercel deploy --prod --yes --token=$VERCEL_TOKEN 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
           echo "$DEPLOY_OUT"
+
           URL=$(echo "$DEPLOY_OUT" | grep -oE "https://[a-zA-Z0-9._-]+" | grep "vercel\.app" | grep -v "vercel\.app/docs" | tail -1)
-          echo "=== URL: $URL ==="
+          echo "=== DEPLOYED URL: $URL ==="
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Post URL as commit comment
@@ -38,7 +43,7 @@ jobs:
           if [ -n "$URL" ]; then
             MSG="Deployed!\n\n$URL"
           else
-            MSG="Deploy ran — check Actions logs"
+            MSG="Deploy ran — check Actions logs for URL"
           fi
           curl -s -X POST \
             "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/comments" \
