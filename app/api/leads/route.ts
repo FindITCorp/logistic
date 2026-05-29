@@ -55,11 +55,14 @@ export async function POST(req: NextRequest) {
       const { data, error } = await db.from('leads').insert(input).select().single()
       if (!error) {
         notifyViaGitHubIssue(input).catch(() => null) // async, don't block
-        // Seed the autonomous nurture sequence (step 1 in ~2h). Fire-and-forget.
-        db.from('lead_followups').insert({
-          lead_id: data.id, channel: 'whatsapp', step: 1,
-          due_at: new Date(Date.now() + 2 * 3600_000).toISOString(),
-        }).then(() => null, () => null)
+        // Seed the autonomous nurture sequence — only when outreach is enabled,
+        // so we don't accumulate a backlog that blasts out when first turned on.
+        if (process.env.NURTURE_ENABLED === 'true') {
+          db.from('lead_followups').insert({
+            lead_id: data.id, channel: 'whatsapp', step: 1,
+            due_at: new Date(Date.now() + 2 * 3600_000).toISOString(),
+          }).then(() => null, () => null)
+        }
         return NextResponse.json({ lead: data }, { status: 201 })
       }
       console.error('Supabase error:', error.message)

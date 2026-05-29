@@ -111,6 +111,13 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 6. Autonomous lead nurture ─────────────────────────────────────────────
+  // Gated behind NURTURE_ENABLED so outbound outreach stays OFF until the owner
+  // explicitly turns it on (set NURTURE_ENABLED=true in env). Everything else
+  // in the autopilot runs regardless.
+  if (process.env.NURTURE_ENABLED !== 'true') {
+    return NextResponse.json({ ok: true, date: now, report, nurture: 'disabled' })
+  }
+
   const { data: dueFollowups } = await db
     .from('lead_followups')
     .select('*, lead:leads(*)')
