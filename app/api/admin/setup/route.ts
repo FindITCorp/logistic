@@ -14,30 +14,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'email and password required' }, { status: 400 })
     }
 
+    const { default: bcrypt } = await import('bcryptjs')
+    const passwordHash = await bcrypt.hash(password, 12)
+
     const db = createServerClient()
 
-    // Create admin user in Supabase Auth using service role
-    const { data, error } = await db.auth.admin.createUser({
-      email: adminEmail,
-      password,
-      email_confirm: true,
-      user_metadata: { role: 'admin', name: 'FINDIT Admin' },
-    })
+    // Check if admin already exists
+    const { data: existing } = await db
+      .from('admin_users')
+      .select('id')
+      .eq('email', adminEmail)
+      .maybeSingle()
 
-    if (error) {
-      // User already exists — try to update password instead
-      if (error.message?.includes('already been registered') || error.code === 'email_exists') {
-        const { data: users } = await db.auth.admin.listUsers()
-        const existing = users?.users?.find(u => u.email === adminEmail)
-        if (existing) {
-          await db.auth.admin.updateUserById(existing.id, { password })
-          return NextResponse.json({ ok: true, action: 'password_updated', email: adminEmail })
-        }
-      }
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (existing) {
+      // Update password hash
+      await db
+        .from('admin_users')
+        .update({ password_hash: passwordHash })
+        .eq('email', adminEmail)
+      return NextResponse.json({ ok: true, action: 'password_updated', email: adminEmail })
     }
 
-    return NextResponse.json({ ok: true, action: 'created', email: data.user?.email })
+    const { error } = await db.from('admin_users').insert({
+      email: adminEmail,
+      password_hash: passwordHash,
+      role: 'admin',
+    })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true, action: 'created', email: adminEmail })
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error' }, { status: 500 })
   }
