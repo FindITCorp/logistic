@@ -101,10 +101,11 @@ export const FINDIT_MARGIN_FLOOR_PCT = 0.30;
 export const MAX_CLIENT_PRICE = Math.round(MARKET_RATE_CASILLERO * 0.60); // $252
 
 // Minimum effective pool volume for overhead amortization.
-// Prevents overhead spike on very small pools (e.g. 2m³ → $310/m³ overhead).
-// FINDIT subsidizes the overhead gap for pools below this threshold —
-// early-stage decision to stay competitive vs casillero ($420) at all volumes.
-export const MIN_OVERHEAD_VOLUME_M3 = 5;
+// FINDIT absorbs the overhead gap for pools below this threshold.
+// At 8 m³: overhead = $620/8 = $77.5/m³, which keeps minClientPrice ≤ $252
+// (106 carrier + 77.5 overhead + 31.8 margin = $215.3 — under the $252 cap).
+// At the old floor of 5 m³: overhead was $124/m³ → minClientPrice = $261.8 > $252 (bug).
+export const MIN_OVERHEAD_VOLUME_M3 = 8;
 
 // % of distributable savings that goes TO THE CLIENT by day joined.
 // Day 1 = client gets 90% (early bird). Day 10 = client gets 10%.
