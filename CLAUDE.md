@@ -249,17 +249,42 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - ✅ Bug /api/admin/setup corregido: ahora usa bcrypt + admin_users (no Supabase Auth)
 - ✅ Next.js 14.2.29 (parche CVE crítico aplicado)
 
-### Páginas del sistema (19 páginas):
+### Páginas del sistema (20 páginas):
 **Públicas:** /, /pools, /pools/[pool_number], /pools/unirme, /registro, /mis-pedidos, /seguimiento, /factura/[token], /factura/estado
-**Admin:** /admin, /admin/dashboard, /admin/login, /admin/leads, /admin/pools, /admin/pools/[id], /admin/pools/[id]/aduana, /admin/proveedores, /admin/envios
+**Admin:** /admin, /admin/dashboard, /admin/login, /admin/leads, /admin/pools, /admin/pools/[id], /admin/pools/[id]/aduana, /admin/proveedores, /admin/envios, /admin/autonomia
 
 ### Supabase DB — Tablas:
-clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log, rate_limits, lead_followups
+clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log, rate_limits, lead_followups, app_settings
+
+### Capa de autonomía & evolución (3 fases — mayo 31, 2026):
+**FASE 1 — Lazo de comunicación:** notificaciones automáticas de ciclo de vida del pool
+(closed→in_transit→at_colon→at_tocumen→completed) a todos los miembros vía notify().
+Wired en /api/pools/[n]/status (manual) y en el cron (auto-close). lib/lifecycleNotify.ts
++ buildLifecycleMessage() en lib/notifications.ts. Doble candado: notify() retorna 'none' sin
+credenciales + flag notifications_enabled.
+
+**FASE 2 — Control en runtime:** tabla app_settings + lib/settings.ts (isEnabled/setSetting con
+caché 30s y fallback a env). Endpoints /api/admin/settings (GET/PATCH) y UI en /admin/autonomia
+(toggles sin redeploy). Reconciliación: vista outstanding_debt + /api/admin/reconciliation
+(deuda por cobrar). Idempotencia en /api/payments (idempotency_key). Opt-out de leads:
+/api/leads/optout?token= + columna leads.opted_out (respetado en el nurture).
+
+**FASE 3 — Optimización evolutiva (DEAP-style en TS):** lib/poolOptimizer.ts — algoritmo genético
+(torneo + cruce uniforme + mutación + elitismo, RNG determinista por seed) que optimiza la
+asignación CONJUNTA de envíos pendientes a pools. Fitness multi-objetivo: margen FINDIT + ahorro
+cliente + bonus por cruzar umbral FCL. Endpoint /api/admin/optimize-assignment (dry-run por
+defecto, apply=true ejecuta vía joinPoolAtomic). 7 tests en tests/unit/poolOptimizer.test.ts.
+
+### Testing:
+- `npm test` → vitest, 49 unit tests (pricing + poolAssignment + poolOptimizer). vitest.config.ts.
+- `npm run test:e2e` → playwright (requiere browser + acceso a Vercel).
 
 ### Pendiente técnico (menor):
 - Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
 - Probar flujo completo E2E: registro → envío → factura → aduana
-- Activar NURTURE_ENABLED=true + WHATSAPP_TOKEN o RESEND_API_KEY para outreach autónomo
+- Para activar outreach real: setear WHATSAPP_TOKEN/WHATSAPP_PHONE_ID o RESEND_API_KEY+NOTIFY_EMAIL_FROM
+  en Vercel, luego encender los toggles en /admin/autonomia (notifications_enabled / nurture_enabled).
+  Los flags arrancan APAGADOS por decisión del dueño.
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.

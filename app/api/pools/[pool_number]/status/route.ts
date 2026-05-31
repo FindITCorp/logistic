@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
 import { verifyAdminToken } from '@/lib/adminAuth'
+import { notifyPoolMembers } from '@/lib/lifecycleNotify'
 import type { PoolStatus, ShipmentStatus } from '@/lib/supabase/database.types'
 
 // Valid forward-only transitions
@@ -77,7 +78,11 @@ export async function POST(req: NextRequest, { params }: { params: { pool_number
         .eq('pool_id', pool.id)
     }
 
-    return NextResponse.json({ pool: updatedPool, previousStatus: pool.status, newStatus: nextStatus })
+    // Auto-notify members of the transition (no-op unless notifications_enabled
+    // + a channel credential are set — outreach stays OFF by default).
+    const notified = await notifyPoolMembers(db, pool.id, pool.pool_number, nextStatus)
+
+    return NextResponse.json({ pool: updatedPool, previousStatus: pool.status, newStatus: nextStatus, notified })
   } catch (err: unknown) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error' }, { status: 400 })
   }

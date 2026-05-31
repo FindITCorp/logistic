@@ -10,6 +10,7 @@ const paymentSchema = z.object({
   method: z.enum(['yappy', 'bank_transfer', 'cash', 'other']),
   reference: z.string().optional(),
   notes: z.string().optional(),
+  idempotency_key: z.string().min(8).optional(),
 })
 
 // POST /api/payments — mark a shipment payment as received (admin only)
@@ -24,6 +25,18 @@ export async function POST(req: NextRequest) {
 
     const db = createServerClient()
 
+    // Idempotency: si llega la misma clave dos veces, no dupliques el pago.
+    const idemKey = input.idempotency_key
+      ?? `${input.shipment_id}:${input.stage}:${input.amount_usd}`
+    const { data: existing } = await db
+      .from('payments')
+      .select('id')
+      .eq('idempotency_key', idemKey)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json({ ok: true, deduped: true })
+    }
+
     // Update shipment payment fields
     const updateFields =
       input.stage === 'advance'
@@ -37,8 +50,8 @@ export async function POST(req: NextRequest) {
 
     if (error) throw new Error(error.message)
 
-    // Log payment record
-    await db.from('payments').insert({
+    // Log payment record (idempotency_key bloquea duplicados a nivel DB).
+    const { error: insErr } = await db.from('payments').insert({
       shipment_id: input.shipment_id,
       stage: input.stage,
       amount_usd: input.amount_usd,
@@ -46,9 +59,13 @@ export async function POST(req: NextRequest) {
       reference: input.reference ?? null,
       notes: input.notes ?? null,
       recorded_by: session!.email,
+      idempotency_key: idemKey,
     })
+    // Carrera: si otro request insertó la misma clave entre el check y el insert,
+    // el índice único lo rechaza — lo tratamos como dedupe, no como error.
+    if (insErr && !/duplicate|unique/i.test(insErr.message)) throw new Error(insErr.message)
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, deduped: !!insErr })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Error' },

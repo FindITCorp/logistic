@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/client'
 import { verifyAdminToken, requireAdmin } from '@/lib/adminAuth'
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
+import { isEnabled } from '@/lib/settings'
 
 const schema = z.object({
   name: z.string().min(2),
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
         notifyViaGitHubIssue(input).catch(() => null) // async, don't block
         // Seed the autonomous nurture sequence — only when outreach is enabled,
         // so we don't accumulate a backlog that blasts out when first turned on.
-        if (process.env.NURTURE_ENABLED === 'true') {
+        if (await isEnabled('nurture_enabled')) {
           db.from('lead_followups').insert({
             lead_id: data.id, channel: 'whatsapp', step: 1,
             due_at: new Date(Date.now() + 2 * 3600_000).toISOString(),

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ScanLine, CheckCircle, AlertCircle, Package, MessageCircle, PlusCircle, Truck, Users, BarChart3, LogOut } from 'lucide-react'
+import { ScanLine, CheckCircle, AlertCircle, Package, MessageCircle, PlusCircle, Truck, Users, BarChart3, LogOut, Bot } from 'lucide-react'
 import { buildWhatsAppLink, buildAssignmentMessage, buildArrivalMessage } from '@/lib/notifications'
 
 interface Provider {
@@ -165,6 +165,9 @@ export default function AdminPage() {
           </a>
           <a href="/admin/envios" className="flex items-center gap-1.5 rounded-lg bg-orange-600/20 hover:bg-orange-600/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition-colors">
             <Package className="w-3.5 h-3.5" /> Todos los envíos
+          </a>
+          <a href="/admin/autonomia" className="flex items-center gap-1.5 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 px-3 py-1.5 text-xs font-medium text-teal-400 transition-colors">
+            <Bot className="w-3.5 h-3.5" /> Autonomía
           </a>
         </div>
 

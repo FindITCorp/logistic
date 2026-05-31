@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/client'
 import { calculateClientPrice } from '@/lib/pricing'
 import { notify } from '@/lib/notify'
+import { notifyPoolMembers } from '@/lib/lifecycleNotify'
+import { isEnabled } from '@/lib/settings'
 import type { OriginCity } from '@/lib/supabase/database.types'
 
 // ─── FINDIT Autopilot ─────────────────────────────────────────────────────────
@@ -17,6 +19,7 @@ import type { OriginCity } from '@/lib/supabase/database.types'
 
 const ORIGINS: OriginCity[] = ['shanghai', 'guangzhou', 'shenzhen']
 const DAY_MS = 86_400_000
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://logistic-six-alpha.vercel.app'
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS)
@@ -59,7 +62,9 @@ export async function GET(req: NextRequest) {
           await db.from('pool_members').update({ price_per_m3: clientPrice, locked_at: now }).eq('id', m.id)
           await db.from('shipments').update({ price_per_m3: clientPrice }).eq('id', m.shipment_id)
         }
-        report.closed.push(`#${pool.pool_number} (${members?.length ?? 0} miembros, ${finalVolume}m³)`)
+        // Notify members the pool closed + their locked-in price (gated/safe).
+        const notified = await notifyPoolMembers(db, pool.id, pool.pool_number, 'closed')
+        report.closed.push(`#${pool.pool_number} (${members?.length ?? 0} miembros, ${finalVolume}m³, avisados ${notified.sent})`)
       } else if (trueDay !== pool.day_number) {
         await db.from('pools').update({ day_number: trueDay }).eq('id', pool.id)
         report.advanced.push(`#${pool.pool_number} → día ${trueDay}`)
@@ -111,10 +116,10 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 6. Autonomous lead nurture ─────────────────────────────────────────────
-  // Gated behind NURTURE_ENABLED so outbound outreach stays OFF until the owner
-  // explicitly turns it on (set NURTURE_ENABLED=true in env). Everything else
-  // in the autopilot runs regardless.
-  if (process.env.NURTURE_ENABLED !== 'true') {
+  // Gated behind the nurture_enabled flag (app_settings, with NURTURE_ENABLED
+  // env fallback) so outbound outreach stays OFF until the owner turns it on
+  // from the admin UI. Everything else in the autopilot runs regardless.
+  if (!(await isEnabled('nurture_enabled'))) {
     return NextResponse.json({ ok: true, date: now, report, nurture: 'disabled' })
   }
 
@@ -126,12 +131,14 @@ export async function GET(req: NextRequest) {
     .limit(50)
 
   for (const f of dueFollowups ?? []) {
-    const lead = f.lead as { id: string; name: string; whatsapp: string | null; email: string | null; origin_city: string | null; status: string } | null
-    if (!lead || lead.status === 'converted') {
+    const lead = f.lead as { id: string; name: string; whatsapp: string | null; email: string | null; origin_city: string | null; status: string; opted_out?: boolean; optout_token?: string | null } | null
+    // Skip converted leads and anyone who opted out (respect unsubscribe).
+    if (!lead || lead.status === 'converted' || lead.opted_out) {
       await db.from('lead_followups').update({ status: 'skipped' }).eq('id', f.id)
       continue
     }
-    const { subject, body } = nurtureMessage(f.step, lead.name, lead.origin_city)
+    const optoutUrl = lead.optout_token ? `${SITE}/api/leads/optout?token=${lead.optout_token}` : null
+    const { subject, body } = nurtureMessage(f.step, lead.name, lead.origin_city, optoutUrl)
     const res = await notify({ whatsapp: lead.whatsapp, email: lead.email, name: lead.name }, subject, body)
     await db.from('lead_followups').update({
       status: res.ok ? 'sent' : 'failed',
@@ -153,22 +160,23 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, date: now, report })
 }
 
-function nurtureMessage(step: number, name: string, origin: string | null): { subject: string; body: string } {
+function nurtureMessage(step: number, name: string, origin: string | null, optoutUrl: string | null): { subject: string; body: string } {
   const city = origin ? origin.charAt(0).toUpperCase() + origin.slice(1) : 'China'
+  const unsub = optoutUrl ? `\n\nPara dejar de recibir mensajes: ${optoutUrl}` : ''
   if (step === 1) {
     return {
       subject: 'Tu ahorro en FINDIT te espera',
-      body: `Hola ${name} 👋 Gracias por tu interés en FINDIT.\n\nConsolidando tu carga ${city} → Panamá pagas desde $180/m³ — hasta 40% menos que un casillero ($420/m³).\n\n¿Cuánto volumen mueves al mes? Te armamos tu cotización.\n\n_FINDIT Logistics_`,
+      body: `Hola ${name} 👋 Gracias por tu interés en FINDIT.\n\nConsolidando tu carga ${city} → Panamá pagas desde $180/m³ — hasta 40% menos que un casillero ($420/m³).\n\n¿Cuánto volumen mueves al mes? Te armamos tu cotización.\n\n_FINDIT Logistics_${unsub}`,
     }
   }
   if (step === 2) {
     return {
       subject: 'Tu pool está por cerrar',
-      body: `Hola ${name} 👋 El pool ${city} → Panamá está sumando volumen. Mientras más rápido entras, mayor tu descuento (día 1 = 90% del ahorro).\n\nReserva tu espacio: https://logistic-six-alpha.vercel.app/registro\n\n_FINDIT Logistics_`,
+      body: `Hola ${name} 👋 El pool ${city} → Panamá está sumando volumen. Mientras más rápido entras, mayor tu descuento (día 1 = 90% del ahorro).\n\nReserva tu espacio: ${SITE}/registro\n\n_FINDIT Logistics_${unsub}`,
     }
   }
   return {
     subject: 'Última llamada — ahorra hasta 40%',
-    body: `Hola ${name} 👋 Última oportunidad de este ciclo para consolidar ${city} → Panamá y ahorrar hasta 40% vs el casillero.\n\nEscríbenos y te ayudamos a empezar hoy.\n\n_FINDIT Logistics_`,
+    body: `Hola ${name} 👋 Última oportunidad de este ciclo para consolidar ${city} → Panamá y ahorrar hasta 40% vs el casillero.\n\nEscríbenos y te ayudamos a empezar hoy.\n\n_FINDIT Logistics_${unsub}`,
   }
 }
