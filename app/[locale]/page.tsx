@@ -1,4 +1,5 @@
 import { useTranslations, useLocale } from 'next-intl';
+import { getTranslations, getLocale } from 'next-intl/server';
 import Header from '@/components/Header';
 import LeadCaptureSection from '@/components/LeadCaptureSection';
 import SavingsCalculator from '@/components/SavingsCalculator';
@@ -28,8 +29,8 @@ async function getLiveStats() {
 }
 
 async function HeroSection() {
-  const t = useTranslations('hero');
-  const locale = useLocale();
+  const t = await getTranslations('hero');
+  const locale = await getLocale();
   const prefix = locale === 'es' ? '' : `/${locale}`;
   const stats = await getLiveStats();
 
