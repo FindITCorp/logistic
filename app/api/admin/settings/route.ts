@@ -16,9 +16,10 @@ export async function GET(req: NextRequest) {
 const patchSchema = z.object({
   nurture_enabled: z.boolean().optional(),
   notifications_enabled: z.boolean().optional(),
+  optimizer_auto_apply: z.boolean().optional(),
 })
 
-// PATCH /api/admin/settings — encender/apagar outreach en runtime (sin redeploy)
+// PATCH /api/admin/settings — encender/apagar flags en runtime (sin redeploy)
 export async function PATCH(req: NextRequest) {
   const session = await verifyAdminToken(req)
   const authError = requireAdmin(session)
@@ -30,6 +31,8 @@ export async function PATCH(req: NextRequest) {
       await setSetting('nurture_enabled', input.nurture_enabled, session!.email)
     if (input.notifications_enabled !== undefined)
       await setSetting('notifications_enabled', input.notifications_enabled, session!.email)
+    if (input.optimizer_auto_apply !== undefined)
+      await setSetting('optimizer_auto_apply', input.optimizer_auto_apply, session!.email)
 
     const settings = await getAllSettings()
     return NextResponse.json({ ok: true, settings })

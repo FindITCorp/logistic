@@ -6,6 +6,7 @@ import { Bot, Send, DollarSign, Sparkles, AlertTriangle, Loader2 } from 'lucide-
 interface Settings {
   nurture_enabled: boolean
   notifications_enabled: boolean
+  optimizer_auto_apply: boolean
 }
 
 interface DebtRow {
@@ -115,6 +116,14 @@ export default function AutonomiaPage() {
             on={settings?.nurture_enabled ?? false}
             disabled={busy || !settings}
             onChange={(v) => toggle('nurture_enabled', v)}
+          />
+          <ToggleRow
+            icon={<Bot className="w-5 h-5" />}
+            title="Optimizador evolutivo automático"
+            desc="El algoritmo genético corre cada día en el cron y aplica automáticamente las mejores asignaciones de envíos a pools. Sin este toggle solo registra la propuesta en el log."
+            on={settings?.optimizer_auto_apply ?? false}
+            disabled={busy || !settings}
+            onChange={(v) => toggle('optimizer_auto_apply', v)}
           />
         </div>
       </section>

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/client'
 import { calculateClientPrice } from '@/lib/pricing'
+import type { ProviderRate } from '@/lib/pricing'
 import { notify } from '@/lib/notify'
 import { notifyPoolMembers } from '@/lib/lifecycleNotify'
 import { isEnabled } from '@/lib/settings'
+import { optimizeAssignment } from '@/lib/poolOptimizer'
+import type { OptShipment, OptPool } from '@/lib/poolOptimizer'
+import { joinPoolAtomic, mapJoinError } from '@/lib/poolAssignment'
 import type { OriginCity } from '@/lib/supabase/database.types'
 
 // ─── FINDIT Autopilot ─────────────────────────────────────────────────────────
@@ -14,7 +18,8 @@ import type { OriginCity } from '@/lib/supabase/database.types'
 //   3. Close pools past day 10 and lock final member prices
 //   4. Guarantee every origin always has one active pool to join
 //   5. Sync shipment lifecycle status to pool status
-//   6. Process due lead follow-ups (autonomous nurture)
+//   6. Evolutionary optimizer — best assignment of pending shipments to pools
+//   7. Process due lead follow-ups (autonomous nurture)
 // Protected by CRON_SECRET.
 
 const ORIGINS: OriginCity[] = ['shanghai', 'guangzhou', 'shenzhen']
@@ -33,7 +38,7 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const now = new Date().toISOString()
   const report: Record<string, string[]> = {
-    healed: [], advanced: [], closed: [], created: [], synced: [], nurtured: [],
+    healed: [], advanced: [], closed: [], created: [], synced: [], optimized: [], nurtured: [],
   }
 
   // ── 1+2+3. Active pools: self-heal, advance day, close if expired ──────────
@@ -115,7 +120,77 @@ export async function GET(req: NextRequest) {
     if ((count ?? 0) > 0) report.synced.push(`#${pool.pool_number}: ${count} envíos → ${shipStatus}`)
   }
 
-  // ── 6. Autonomous lead nurture ─────────────────────────────────────────────
+  // ── 6. Evolutionary optimizer — asignación automática diaria ─────────────
+  // Corre siempre (propone en el log). Si optimizer_auto_apply=true, aplica
+  // los mejores asignaciones halladas por el GA antes de que el día avance.
+  try {
+    const { data: pendingShipments } = await db
+      .from('shipments')
+      .select('id, origin_city, volume_m3')
+      .eq('status', 'received')
+      .is('pool_id', null)
+
+    const { data: candidatePools } = await db
+      .from('pools')
+      .select('id, pool_number, origin_city, current_volume_m3, day_number, provider_id')
+      .eq('status', 'active')
+      .lt('day_number', 10)
+
+    if (pendingShipments?.length && candidatePools?.length) {
+      const optPools: OptPool[] = []
+      for (const p of candidatePools) {
+        let rates: ProviderRate[] = []
+        if (p.provider_id) {
+          const { data } = await db
+            .from('provider_rates')
+            .select('min_volume_m3, max_volume_m3, rate_per_m3')
+            .eq('provider_id', p.provider_id)
+            .eq('origin_city', p.origin_city)
+            .order('min_volume_m3')
+          rates = (data ?? []) as ProviderRate[]
+        }
+        optPools.push({
+          id: p.id, pool_number: p.pool_number, origin_city: p.origin_city,
+          current_volume_m3: p.current_volume_m3, day_number: p.day_number, providerRates: rates,
+        })
+      }
+
+      const optShipments: OptShipment[] = pendingShipments.map(s => ({
+        id: s.id, origin_city: s.origin_city, volume_m3: s.volume_m3,
+      }))
+
+      // Seed basado en la fecha → reproducible por día, diferente cada jornada.
+      const daySeed = Math.floor(Date.now() / 86_400_000)
+      const result = optimizeAssignment(optShipments, optPools, { seed: daySeed, generations: 120 })
+
+      if (result.assignments.length) {
+        const autoApply = await isEnabled('optimizer_auto_apply')
+        if (autoApply) {
+          let committed = 0; let failed = 0
+          for (const a of result.assignments) {
+            const { error: joinErr } = await joinPoolAtomic(db, a.pool_id, a.shipment_id)
+            if (joinErr) {
+              failed++
+              report.optimized.push(`ERROR ${a.shipment_id}: ${mapJoinError(joinErr).message}`)
+            } else {
+              committed++
+            }
+          }
+          report.optimized.push(`GA aplicado: fitness=${result.fitness.toFixed(0)}, ${committed} asignados, ${failed} fallidos`)
+        } else {
+          report.optimized.push(`GA (dry-run): fitness=${result.fitness.toFixed(0)}, ${result.assignments.length} propuestas — activa optimizer_auto_apply para aplicar`)
+        }
+      } else {
+        report.optimized.push('GA: sin asignaciones óptimas para los inputs actuales')
+      }
+    } else {
+      report.optimized.push(`GA: omitido (${pendingShipments?.length ?? 0} envíos pendientes, ${candidatePools?.length ?? 0} pools)`)
+    }
+  } catch (e) {
+    report.optimized.push(`GA ERROR: ${e instanceof Error ? e.message : 'desconocido'}`)
+  }
+
+  // ── 7. Autonomous lead nurture ─────────────────────────────────────────────
   // Gated behind the nurture_enabled flag (app_settings, with NURTURE_ENABLED
   // env fallback) so outbound outreach stays OFF until the owner turns it on
   // from the admin UI. Everything else in the autopilot runs regardless.

@@ -5,12 +5,13 @@ import { createServerClient } from './supabase/client'
 // Orden de resolución: DB → env var → default. Cachea 30s para no martillar
 // la DB en cada invocación del cron / request.
 
-type SettingKey = 'nurture_enabled' | 'notifications_enabled'
+type SettingKey = 'nurture_enabled' | 'notifications_enabled' | 'optimizer_auto_apply'
 
 // Mapeo a la env var histórica (fallback si la fila no existe en DB).
 const ENV_FALLBACK: Record<SettingKey, string | undefined> = {
   nurture_enabled: process.env.NURTURE_ENABLED,
   notifications_enabled: process.env.NOTIFICATIONS_ENABLED,
+  optimizer_auto_apply: process.env.OPTIMIZER_AUTO_APPLY,
 }
 
 const CACHE_TTL_MS = 30_000
@@ -51,9 +52,10 @@ export async function setSetting(key: SettingKey, value: boolean, updatedBy?: st
 
 /** Snapshot de todos los flags para la UI de admin. */
 export async function getAllSettings(): Promise<Record<SettingKey, boolean>> {
-  const [nurture, notifications] = await Promise.all([
+  const [nurture, notifications, optimizer] = await Promise.all([
     isEnabled('nurture_enabled'),
     isEnabled('notifications_enabled'),
+    isEnabled('optimizer_auto_apply'),
   ])
-  return { nurture_enabled: nurture, notifications_enabled: notifications }
+  return { nurture_enabled: nurture, notifications_enabled: notifications, optimizer_auto_apply: optimizer }
 }
