@@ -17,6 +17,9 @@ on:
         required: false
         default: '1'
 
+permissions:
+  contents: write
+
 jobs:
   fetch-results:
     runs-on: ubuntu-latest
