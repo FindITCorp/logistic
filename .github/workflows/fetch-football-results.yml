@@ -172,17 +172,14 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config commit.gpgsign false
-          # Pull latest to avoid conflicts
-          git fetch origin claude/sleepy-bohr-PDVSt
-          git reset --hard origin/claude/sleepy-bohr-PDVSt
-          # Stage results
+          # Stage files created/modified by the Python steps above
           git add mundial2026/data/daily_results/
           git add mundial2026/data/mundial2026.db
-          # Only commit if there are changes
+          # Only commit and push if there are staged changes
           if git diff --staged --quiet; then
             echo "✅ No new data to commit"
           else
             git commit -m "chore: daily results $(date -u '+%Y-%m-%d')"
-            git push origin HEAD:claude/sleepy-bohr-PDVSt
+            git push origin HEAD:claude/sleepy-bohr-PDVSt --force-with-lease
             echo "✅ Pushed updated results"
           fi
