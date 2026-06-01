@@ -171,8 +171,12 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add mundial2026/data/daily_results/
-          git add mundial2026/data/mundial2026.db
-          git diff --staged --quiet && echo "Nothing to commit" || \
-            git commit -m "chore: daily results update $(date -u '+%Y-%m-%d')" && \
-            git push origin claude/sleepy-bohr-PDVSt
+          git pull --rebase origin claude/sleepy-bohr-PDVSt || true
+          git add mundial2026/data/daily_results/ || true
+          git add mundial2026/data/mundial2026.db || true
+          if git diff --staged --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "chore: daily results update $(date -u '+%Y-%m-%d')"
+            git push origin HEAD:claude/sleepy-bohr-PDVSt
+          fi
