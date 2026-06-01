@@ -171,12 +171,17 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin claude/sleepy-bohr-PDVSt || true
-          git add mundial2026/data/daily_results/ || true
-          git add mundial2026/data/mundial2026.db || true
+          # Pull latest to avoid conflicts
+          git fetch origin claude/sleepy-bohr-PDVSt
+          git merge origin/claude/sleepy-bohr-PDVSt --no-edit -m "Merge remote" || true
+          # Stage results
+          git add mundial2026/data/daily_results/
+          git add mundial2026/data/mundial2026.db
+          # Only commit if there are changes
           if git diff --staged --quiet; then
-            echo "Nothing to commit"
+            echo "✅ No new data to commit"
           else
-            git commit -m "chore: daily results update $(date -u '+%Y-%m-%d')"
+            git commit -m "chore: daily results $(date -u '+%Y-%m-%d')"
             git push origin HEAD:claude/sleepy-bohr-PDVSt
+            echo "✅ Pushed updated results"
           fi
