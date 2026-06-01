@@ -171,9 +171,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config commit.gpgsign false
           # Pull latest to avoid conflicts
           git fetch origin claude/sleepy-bohr-PDVSt
-          git merge origin/claude/sleepy-bohr-PDVSt --no-edit -m "Merge remote" || true
+          git reset --hard origin/claude/sleepy-bohr-PDVSt
           # Stage results
           git add mundial2026/data/daily_results/
           git add mundial2026/data/mundial2026.db
