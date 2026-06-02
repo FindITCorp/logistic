@@ -1,7 +1,7 @@
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 15 de mayo de 2026
+**Última actualización:** 2 de junio de 2026
 **Dueño:** FindITCorp
-**Estado:** 🟢 MVP TÉCNICO CONSTRUIDO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
+**Estado:** 🟢 MVP TÉCNICO COMPLETO EN PRODUCCIÓN | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
 
 ---
 
@@ -18,111 +18,240 @@ Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con 
 
 ---
 
-## 2. ESTADO TÉCNICO DEL MVP (ACTUALIZADO)
+## 2. INFRAESTRUCTURA Y DESPLIEGUE
 
-### Repositorio
+### Repositorio y Deploy
 - **GitHub:** finditcorp/logistic
-- **Rama de trabajo:** `claude/continue-work-HHKEo`
-- **Deploy:** Vercel (vercel.json configurado)
-- **Stack:** Next.js 14 + next-intl + Tailwind CSS
+- **Rama principal:** `main` (deploy automático en Vercel al hacer push)
+- **URL live:** https://logistic-six-alpha.vercel.app
+- **Vercel:** proyecto `logistic` | projectId: `prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5` | orgId: `team_BrCUd1PJnqaQTOuhJFrDYsw3`
+- **Stack:** Next.js 14 + next-intl + Tailwind CSS + Supabase
 
-### Estructura del proyecto
+### GitHub Secrets configurados en Vercel
+- VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+- ADMIN_SETUP_KEY, CRON_SECRET, SUPABASE_ACCESS_TOKEN
+- SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+- NEXT_PUBLIC_SITE_URL = https://logistic-six-alpha.vercel.app
+
+### Para activar canales de comunicación (pendiente)
+- WhatsApp: WHATSAPP_TOKEN + WHATSAPP_PHONE_ID + WHATSAPP_VERIFY_TOKEN
+- Email: RESEND_API_KEY + NOTIFY_EMAIL_FROM
+- GitHub fallback: GITHUB_TOKEN_NOTIFY
+
+---
+
+## 3. ESTADO TÉCNICO COMPLETO (2 junio 2026)
+
+### Páginas del sistema (19 rutas)
+
+**Públicas:**
+| Ruta | Descripción |
+|------|-------------|
+| `/` o `/es` | Landing en español (stats en vivo) |
+| `/en` | Landing en inglés |
+| `/pools` | Pools activos con precios dinámicos |
+| `/pools/[pool_number]` | Detalle de pool individual |
+| `/pools/unirme` | Formulario de unión a pool |
+| `/registro` | Registro de nuevo cliente |
+| `/mis-pedidos` | Estado de pedidos por código FDT |
+| `/seguimiento` | Timeline visual animado (6 pasos) |
+| `/factura/[token]` | Ver factura por token |
+| `/factura/estado` | Buscar factura por código FDT |
+
+**Admin:**
+| Ruta | Descripción |
+|------|-------------|
+| `/admin` | Redirect a dashboard |
+| `/admin/login` | Auth admin (httpOnly cookie 24h, bcrypt) |
+| `/admin/dashboard` | KPIs: revenue, pools activos, facturas pendientes |
+| `/admin/leads` | Gestión de leads con filtros |
+| `/admin/pools` | Lista de todos los pools |
+| `/admin/pools/[id]` | Detalle de pool con acciones |
+| `/admin/pools/[id]/aduana` | Gestión aduanal del pool |
+| `/admin/proveedores` | Gestión de proveedores y tarifas |
+| `/admin/envios` | Envíos con filtros y acción WhatsApp |
+| `/admin/autonomia` | Toggles de feature flags + Pool Intelligence UI |
+
+### APIs (33 endpoints)
+
+**Admin:**
+- `GET/PATCH /api/admin/settings` — feature flags (4 flags con caché 30s)
+- `GET /api/admin/stats` — KPIs del dashboard
+- `GET /api/admin/pool-intelligence` — análisis FCL de todos los pools activos
+- `POST /api/admin/optimize-assignment` — GA optimizer (dry-run por defecto, `?apply=true` ejecuta)
+- `GET /api/admin/reconciliation` — deuda outstanding por cobrar
+- `GET /api/admin/settlement` — conciliación por pool
+- `POST /api/admin/auth` — login/logout admin
+- `POST /api/admin/setup` — setup inicial admin (ADMIN_SETUP_KEY)
+
+**Cron:**
+- `GET /api/cron/advance-pools` — autopilot de 8 pasos (ver sección cron)
+
+**WhatsApp:**
+- `GET/POST /api/whatsapp/webhook` — bot conversacional (precio/tracking/pools/unirse)
+
+**Públicos:**
+- `/api/pools`, `/api/pools/[n]`, `/api/pools/[n]/status`
+- `/api/leads`, `/api/leads/optout`
+- `/api/orders`, `/api/orders/[id]/join-pool`
+- `/api/shipments`, `/api/shipments/[id]`, `/api/shipments/[id]/assign`, `/api/shipments/[id]/invoice`
+- `/api/clients`, `/api/invoices`, `/api/payments`, `/api/providers`, `/api/referrals`
+- `/api/seguimiento`, `/api/stats/public`, `/api/health`
+
+### Librerías clave (lib/)
+
+| Archivo | Función |
+|---------|---------|
+| `pricing.ts` | Motor de precios dinámico (referencia $285/m³, tramos LCL, distribución día 1-10) |
+| `poolIntelligence.ts` | **[DIFERENCIADOR]** Velocidad m³/día, predicción FCL, alertas proactivas |
+| `poolOptimizer.ts` | **[DIFERENCIADOR]** Algoritmo genético DEAP-style: asignación óptima de envíos |
+| `poolAssignment.ts` | joinPoolAtomic() con FOR UPDATE — race condition eliminada |
+| `notifications.ts` | Envío multi-canal: WhatsApp → email → GitHub fallback |
+| `notify.ts` | Wrapper unificado con gating por feature flags |
+| `lifecycleNotify.ts` | Notificaciones automáticas por cambio de estado del pool |
+| `settings.ts` | Feature flags con caché 30s y fallback a env vars |
+| `adminAuth.ts` | Auth con httpOnly cookies, bcrypt, audit log |
+| `rateLimit.ts` | Rate limiting durable en DB (tabla rate_limits) |
+
+### Base de datos — Tablas Supabase
 ```
-app/
-  [locale]/
-    page.tsx          — Landing page completa (4 secciones)
-    pools/page.tsx    — Página de pools activos
-    layout.tsx        — Layout con selector de idioma
-components/
-  Header.tsx          — Nav con ES|EN switcher
-  LanguageSwitcher.tsx
-  PoolCard.tsx        — Tarjeta de pool con precios dinámicos
-  PricingTierTable.tsx — Tabla interactiva con slider
-lib/
-  pricing.ts          — Motor de precios dinámico ✅ CORRECTO
-messages/
-  es.json             — Traducciones completas español
-  en.json             — Traducciones completas inglés
-middleware.ts         — Routing i18n (ES default, /en para inglés)
+clients, pools, shipments, pool_members, orders, providers, provider_rates,
+leads, invoices, payments, admin_users, admin_sessions, audit_log,
+rate_limits, lead_followups, app_settings
 ```
 
-### Rutas del sitio
-- `/` o `/es` → Landing en español
-- `/en` → Landing en inglés
-- `/pools` o `/es/pools` → Pools activos en español
-- `/en/pools` → Pools activos en inglés
-
-### Motor de precios (lib/pricing.ts) — LÓGICA CONFIRMADA
-**Precio de referencia:** $100/m³ (techo máximo)
-**Duración del pool:** 10 días
-**Embarques:** cada 15 días
-
-#### Tramos de volumen (costo del naviero)
-| Volumen pool | Costo naviero | Ahorro vs referencia |
-|---|---|---|
-| 0–5 m³ | $100 | $0 |
-| 5–15 m³ | $90 | $10 |
-| 15–20 m³ | $85 | $15 |
-| +20 m³ | $80 | $20 |
-
-#### Distribución del ahorro por día de entrada ✅ CONFIRMADO
-| Día entrada | Días restantes | % cliente | % FINDIT |
-|---|---|---|---|
-| Día 1 | 10 días | 90% | 10% |
-| Día 2 | 9 días | 80% | 20% |
-| Día 3 | 8 días | 70% | 30% |
-| Día 4 | 7 días | 60% | 40% |
-| Día 5 | 6 días | 50% | 50% |
-| Día 6 | 5 días | 40% | 60% |
-| Día 7 | 4 días | 30% | 70% |
-| Día 8 | 3 días | 20% | 80% |
-| Día 9 | 2 días | 10% | 90% |
-| Día 10 | 1 día | 10% (piso) | 90% |
-
-**Ejemplo confirmado (precio base $100, naviero baja a $90 = ahorro $10):**
-- Cliente entró día 1 → paga **$91**, FINDIT gana **$1/m³**
-- Cliente entró día 5 → paga **$95**, FINDIT gana **$5/m³**
-
-### Datos mock de pools (para demostración)
-| Pool | Ruta | Volumen | Participantes | Día |
-|---|---|---|---|---|
-| 1 | Shanghai → Colón | 8.5 m³ | 6 | Día 3 |
-| 2 | Guangzhou → Colón | 2.1 m³ | 2 | Día 1 |
-| 3 | Shenzhen → Colón | 16.4 m³ | 11 | Día 7 |
+### Migraciones (001–018)
+| # | Archivo | Contenido |
+|---|---------|-----------|
+| 001 | initial_schema | Tablas base: clients, pools, shipments, pool_members |
+| 002 | orders | Tabla orders |
+| 003 | pool_number | Campo pool_number auto-incremental |
+| 004 | providers | Tabla providers + provider_rates |
+| 005 | leads | Tabla leads con opt-out |
+| 006 | lifecycle | Estado lifecycle de pools |
+| 007 | backend | Funciones RPC join_pool(), advance_pool_day() |
+| 008 | invoices | Tabla invoices + payments |
+| 009 | storage | Buckets Supabase Storage |
+| 010 | leads_v2 | Índices y campos adicionales en leads |
+| 011 | security | admin_users, admin_sessions, audit_log |
+| 012 | integrity_autonomy | rate_limits, lead_followups, app_settings (nurture+notify) |
+| 013 | rls_lockdown | RLS: anon = cero acceso PII |
+| 014 | seed | Datos de demostración |
+| 015 | fix_pricing_overhead_floor | Corrección cálculo margen FINDIT |
+| 016 | settings_reconciliation | Vista outstanding_debt, idempotency_key en payments |
+| 017 | optimizer_flag | app_settings: optimizer_auto_apply = 'false' |
+| 018 | pool_alerts | app_settings: pool_alerts_enabled = 'false' |
 
 ---
 
-## 3. SUPUESTOS CRÍTICOS (ESTADO ACTUAL)
+## 4. DIFERENCIADORES CLAVE
 
-| # | Supuesto | Crítico | Status | Validación necesaria |
-|---|----------|---------|--------|----------------------|
-| 1 | Existe demanda (100+ micro-importadores) | SÍ | 🔴 NO VALIDADO | Contactar 10-15 importadores vía redes |
-| 2 | Forwarders aceptan tier pricing dinámico | SÍ | 🔴 NO VALIDADO | Contactar 3+ forwarders, obtener tabla precios |
-| 3 | Margen ≥12% es viable | SÍ | 🟡 FRÁGIL | Depende de volumen 6m³+ |
-| 4 | Regulación aduanal permite estructura | SÍ | 🔴 NO VALIDADO | Consultar agente aduanal Panamá |
-| 5 | Clientes aceptan esperar 10 días | SÍ | 🔴 NO VALIDADO | Encuesta directa a 10 importadores |
+### 1. Pool Intelligence Engine (`lib/poolIntelligence.ts`)
+**El diferenciador más importante.** Ningún consolidador detecta proactivamente que un pool va a cruzar FCL en 2 días y alerta automáticamente a los leads.
 
----
+- Calcula velocidad de llenado (m³/día, ventana 3 días)
+- Predice días hasta cruzar umbral FCL (20 m³)
+- Calcula probabilidad FCL crossing (0–1)
+- Selecciona leads óptimos para alertar: pool ≥60%, días restantes ≥2, ahorro potencial >$5
+- Acción recomendada: `join_now | wait_for_fcl | already_fcl | low_data`
 
-## 4. DECISIONES CONFIRMADAS
+### 2. Algoritmo Genético (`lib/poolOptimizer.ts`)
+Optimización DEAP-style en TypeScript: asignación conjunta de envíos pendientes a pools maximizando margen FINDIT + ahorro cliente + bonus FCL. Seed diario determinista (`floor(Date.now() / 86_400_000)`).
 
-✓ Estándar W/M (cobrar mayor entre volumen/peso)
-✓ Pool 10 días fijos (embarques cada 15 días)
-✓ Múltiples forwarders (mín 2)
-✓ MVP manual (Excel + WhatsApp)
-✓ Cliente paga 50%+50%
-✓ Distribución ahorro: día 1=90% → día 10=10% (piso), -10% por día
-✓ Precio de referencia = techo máximo ($100/m³)
-✓ Precio real siempre ≤ precio de referencia
-✓ Bodega Guangzhou + Panamá
-✓ Estructura legal: Consolidador importador oficial
-✓ Sitio bilingüe ES/EN con routing automático
+### 3. WhatsApp Bot (`/api/whatsapp/webhook`)
+Canal primario para micro-importadores: cotizar, tracking y unirse sin salir de WhatsApp.
+Comandos: `precio [m³] [ciudad]` · `tracking FDT-XXXX` · `pools` · `unirse`
+
+### 4. Precio dinámico día a día
+Distribución del ahorro: día 1=90% al cliente → día 10=10% (piso), menos 10% por día. Incentiva entrar temprano al pool.
 
 ---
 
-## 5. MODELO FINANCIERO
+## 5. FEATURE FLAGS (todos arrancan APAGADOS)
 
-**Proyección 3 meses:**
+| Flag | Descripción | Activar cuando |
+|------|-------------|----------------|
+| `notifications_enabled` | Notificaciones de ciclo de vida del pool | WHATSAPP_TOKEN o RESEND_API_KEY en Vercel |
+| `nurture_enabled` | Secuencia de follow-up automático a leads | Validada demanda, lead pipeline activo |
+| `optimizer_auto_apply` | GA aplica cambios sin confirmar | Confianza en el modelo, volumen estable |
+| `pool_alerts_enabled` | Alertas proactivas FCL a leads | Notificaciones activadas primero |
+
+**Toggle en:** `/admin/autonomia` (sin redeploy)
+**API:** `PATCH /api/admin/settings` `{ "key": "flag_name", "value": true }`
+
+---
+
+## 6. AUTOPILOT CRON — 8 pasos diarios
+
+`GET /api/cron/advance-pools` (protegido por CRON_SECRET header)
+
+1. **Avanzar día** — `advance_pool_day()` en todos los pools activos
+2. **Cerrar pools vencidos** — día ≥10 → status='closed', notifica miembros
+3. **Auto-sanar volumen** — recalcula `current_volume_m3` desde `pool_members`
+4. **Crear pools faltantes** — garantiza 1 pool activo por ruta (3 rutas)
+5. **Notificaciones de ciclo** — notifica cambios de estado a miembros (gated por `notifications_enabled`)
+6. **GA Optimizer** — optimiza asignación pendiente (gated por `optimizer_auto_apply`)
+7. **Pool Intelligence alerts** — alerta leads de pools ≥60% (gated por `pool_alerts_enabled`)
+8. **Lead nurture** — secuencia follow-up a leads (gated por `nurture_enabled`)
+
+---
+
+## 7. TRACKING VISUAL (`/seguimiento`)
+
+Timeline animado de 6 pasos:
+```
+📦 En bodega China → ✅ Consolidado → 🚢 En tránsito → 🇵🇦 Llegó a Colón → 🏛️ Aduana Tocumen → 🎉 Listo para retirar
+```
+ETAs automáticos por estado: received=50d, assigned=45d, in_transit=35d, at_colon=8d, at_tocumen=3d, delivered=0d
+Panel de ahorro: muestra `(420 - precio_bloqueado) * volumen` vs casillero cuando precio está fijado.
+
+---
+
+## 8. MOTOR DE PRECIOS (`lib/pricing.ts`)
+
+**Precio de referencia:** $285/m³ (igual a LMA = competitivos en el peor caso)
+**Umbral FCL:** 20 m³ (LCL → FCL 20ft, ahorro ≈$20+/m³)
+
+#### Tramos LCL (costo naviero)
+| Volumen pool | Costo naviero |
+|---|---|
+| 0–5 m³ | $100 |
+| 5–15 m³ | $92 |
+| 15–20 m³ | $87 |
+| ≥20 m³ | $82 (o FCL 20ft) |
+| ≥41 m³ | FCL 40ft (~$58–78/m³) |
+
+#### Distribución del ahorro por día de entrada
+| Día | % cliente | % FINDIT |
+|-----|-----------|---------|
+| 1 | 90% | 10% |
+| 5 | 50% | 50% |
+| 10 | 10% (piso) | 90% |
+
+---
+
+## 9. TESTING
+
+- `npm test` → vitest, **49 unit tests** (pricing + poolAssignment + poolOptimizer)
+- `npm run test:e2e` → playwright (requiere browser + acceso a Vercel)
+- Config: `vitest.config.ts`
+- Test files: `tests/unit/poolOptimizer.test.ts`, `tests/unit/pricing.test.ts`, `tests/unit/poolAssignment.test.ts`
+
+---
+
+## 10. SUPUESTOS CRÍTICOS
+
+| # | Supuesto | Status |
+|---|----------|--------|
+| 1 | Existe demanda (100+ micro-importadores) | 🔴 NO VALIDADO |
+| 2 | Forwarders aceptan tier pricing dinámico | 🔴 NO VALIDADO |
+| 3 | Margen ≥12% es viable | 🟡 FRÁGIL (depende de ≥6m³) |
+| 4 | Regulación aduanal permite estructura | 🔴 NO VALIDADO |
+| 5 | Clientes aceptan esperar 10 días | 🔴 NO VALIDADO |
+
+---
+
+## 11. MODELO FINANCIERO
 
 | Métrica | Mes 1 | Mes 2 | Mes 3 |
 |---------|-------|-------|-------|
@@ -131,99 +260,37 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 | Costos | $3,900 | $4,100 | $4,300 |
 | Margen neto | -$3,745 | -$3,790 | -$3,680 |
 
-**Burn rate:** $2,600/mes
-**Capital requerido:** $25K (3 meses MVP)
-**Break-even:** Mes 5-6 (si volumen crece a 8m³+/mes)
+**Burn rate:** $2,600/mes · **Capital requerido:** $25K (3 meses) · **Break-even:** Mes 5-6 (≥8m³/mes)
 
 ---
 
-## 6. PLAN DE VALIDACIÓN (90 DÍAS)
+## 12. CREDENCIALES Y ACCESO
 
-### FASE 1: Supuestos críticos (Semana 1)
-
-**Tarea 1.1:** Validar forwarders
-- Contactar 5-7 forwarders en Guangzhou/Shanghai
-- Obtener tabla precios: 1m³, 3m³, 6m³, 10m³
-- Pregunta clave: "¿Si cierro con 2m³, qué tarifa aplicas?"
-- **Resultado esperado:** 2+ forwarders dan tabla clara = VALIDADO
-
-**Tarea 1.2:** Identificar demanda
-- Contactar 15 micro-importadores en Facebook, LinkedIn, OLX Panamá
-- Pregunta: "¿Cuánto pagas hoy? ¿Esperas 10 días por 20-30% descuento?"
-- **Resultado esperado:** 70%+ dicen SÍ = VALIDADO
-
-**Tarea 1.3:** Validación aduanal
-- Contactar agente aduanal Panamá
-- Pregunta: "¿Puedo importar como consolidador con múltiples clientes finales?"
-- **Resultado esperado:** Aduanas dice "viable" = VALIDADO
-
-**Decisión GO/NO-GO:** Si 2 de 3 tareas pasan, continúa a Fase 2.
+- **Admin:** enrique.eaguilarh@gmail.com / Findit2026!
+- **Tokens locales:** `/root/.claude/.tokens` (NUNCA subir a GitHub)
+- **Setup git:** `source /root/.claude/.tokens && git remote set-url origin https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git`
 
 ---
 
-## 7. CAPITAL REQUERIDO
+## 13. PENDIENTES TÉCNICOS
 
-**MVP Fase 1 (3 meses): $25,000**
-
-| Item | Costo |
-|------|-------|
-| Bodega China (3 meses) | $2,400 |
-| Bodega Panamá (3 meses) | $2,400 |
-| Operador logístico | $6,000 |
-| Agente aduanal | $1,500 |
-| Consultoría legal | $1,500 |
-| Marketing | $2,000 |
-| Contingencia (20%) | $4,700 |
-| **TOTAL** | **$25,000** |
+- [ ] Configurar WHATSAPP_VERIFY_TOKEN en Vercel para activar bot de WhatsApp
+- [ ] Configurar WHATSAPP_TOKEN + WHATSAPP_PHONE_ID en Vercel para envío
+- [ ] O configurar RESEND_API_KEY + NOTIFY_EMAIL_FROM para email
+- [ ] Activar `notifications_enabled` en /admin/autonomia cuando credenciales estén en Vercel
+- [ ] Probar flujo E2E completo: registro → envío → factura → aduana
+- [ ] Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
 
 ---
 
-## 8. ESTADO ACTUAL
+## 14. REGLAS DE TRABAJO
 
-**Fecha:** 18 de mayo de 2026
-**Fase:** 🟢 MVP TÉCNICO LISTO Y DEPLOYADO
-**Sitio:** Live en Vercel — deploy automático desde `main` vía GitHub Actions
-**Validación operativa:** 🔴 POR COMENZAR
-**Capital:** NO INVERTIDO AÚN
-
-### Últimos cambios deployados:
-- ✅ Modal "Unirme al pool" implementado (JoinPoolModal.tsx) — formulario con nombre, WhatsApp/email, volumen, validación, confirmación
-- ✅ PoolCard convertido a client component para manejar modal
-- ✅ Traducciones del modal en ES/EN
-- ✅ Stop hook reescrito — regenera CLAUDE.md con instrucción explícita de NO usar tool de memoria
-- ✅ CLAUDE.md simplificado y reforzado para sesiones nuevas
-
-### Pendiente técnico:
-- Conectar formulario "Unirme" a backend real (actualmente muestra confirmación mock — candidato: enviar a Google Sheets o WhatsApp API)
-- URL pública de Vercel — verificar en vercel.com/dashboard
-
-### Para retomar en sesión nueva:
-Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
-Los tokens están guardados en `/root/.claude/.tokens` (solo en el contenedor local).
+- Push siempre a `main` → dispara deploy en Vercel
+- NUNCA subir tokens a GitHub
+- Actualizar CLAUDE.md + MEMORIA.md al final de cada sesión
+- Commit + push de ambos archivos junto con cualquier cambio de código
+- Credenciales de admin en DB, no en código ni env vars
 
 ---
 
-## 9. PROTOCOLO AUTOMÁTICO
-
-### Cuando abras nuevo chat:
-1. Di `continuamos` o `MEMORIA SYNC`
-2. Yo leo este archivo
-3. Tengo contexto completo — técnico y de negocio
-4. Retomamos desde donde estábamos
-
-### Credenciales de acceso
-- Tokens guardados localmente en `/root/.claude/.tokens` (nunca en GitHub)
-- Al iniciar sesión, cargar con: `source /root/.claude/.tokens`
-- Configurar remote: `git remote set-url origin https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git`
-- Si el archivo no existe, pedirle al usuario los tokens (GitHub PAT + Vercel token)
-
-### Regla para el asistente:
-- Al leer `continuamos`: ejecutar el comando de remote de arriba inmediatamente
-- **SIEMPRE** actualizar esta MEMORIA.md al final de cada sesión con cambios relevantes
-- **SIEMPRE** hacer commit + push junto con cualquier cambio de código
-- Push siempre a `main` para triggear deploy automático en Vercel
-- Rama de trabajo activa: `main`
-
----
-
-**Este archivo es la fuente de verdad del proyecto.**
+**Este archivo es la fuente de verdad técnica del proyecto.**

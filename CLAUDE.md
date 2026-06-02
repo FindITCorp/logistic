@@ -21,7 +21,7 @@ Responde EXACTAMENTE así (no uses ningún tool de memoria, no digas que no tien
 ## ESTADO COMPLETO DEL PROYECTO
 
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 29 de mayo de 2026
+**Última actualización:** 2 de junio de 2026
 **Dueño:** FindITCorp
 **Estado:** 🟢 MVP TÉCNICO CONSTRUIDO Y DEPLOYADO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
 
@@ -220,8 +220,8 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 
 ## 8. ESTADO ACTUAL
 
-**Fecha:** 29 de mayo de 2026 (actualizado)
-**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN — CAPA INTEGRIDAD+AUTONOMÍA DEPLOYADA
+**Fecha:** 2 de junio de 2026 (actualizado)
+**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN — DIFERENCIADORES + AUTONOMÍA DEPLOYADOS
 **Sitio:** https://logistic-six-alpha.vercel.app — deploy automático desde `main` vía GitHub Actions
 **Validación operativa:** 🟡 LISTA PARA COMENZAR
 **Capital:** NO INVERTIDO AÚN
@@ -237,14 +237,18 @@ middleware.ts         — Routing i18n (ES default, /en para inglés)
 - ✅ Estado de facturas para clientes — /factura/estado (búsqueda por código FDT)
 - ✅ JoinPoolModal conectado a DB — leads se guardan en Supabase
 - ✅ Landing con stats en vivo — HeroSection lee datos reales de Supabase
-- ✅ Migraciones 001-013 aplicadas en producción
+- ✅ Migraciones 001-018 aplicadas en producción
 - ✅ **Race condition eliminada**: join_pool() atómica con FOR UPDATE
 - ✅ **RLS PII lockdown** (migración 013): anon = zero acceso
 - ✅ **Rate limiting durable**: tabla rate_limits + RPC
-- ✅ **Autopilot cron**: auto-sana volumen, cierra pools, garantiza pool activo por ruta
+- ✅ **Autopilot cron 8 pasos**: avanza día, cierra pools, auto-sana volumen, garantiza pool activo, lifecycle notifs, GA optimizer, pool alerts, lead nurture
 - ✅ **Motor de notificaciones**: WhatsApp → email → GitHub fallback
 - ✅ **Conciliación real**: pool_settlement view + /api/admin/settlement
 - ✅ **Crecimiento orgánico**: referidos, sitemap dinámico, JSON-LD, OG cards WhatsApp
+- ✅ **[NUEVO] WhatsApp Bot**: /api/whatsapp/webhook — precio/tracking/pools/unirse sin salir de WA
+- ✅ **[NUEVO] Pool Intelligence Engine**: lib/poolIntelligence.ts — velocidad FCL, alertas proactivas a leads, dashboard en /admin/autonomia
+- ✅ **[NUEVO] Algoritmo genético (GA)**: lib/poolOptimizer.ts — asignación óptima DEAP-style, seed diario determinista
+- ✅ **[NUEVO] Timeline visual**: /seguimiento rediseñado con stepper animado de 6 pasos + panel ahorro vs casillero
 - ✅ Cuenta admin: enrique.eaguilarh@gmail.com / Findit2026! (insertada directo en DB vía SQL)
 - ✅ Bug /api/admin/setup corregido: ahora usa bcrypt + admin_users (no Supabase Auth)
 - ✅ Next.js 14.2.29 (parche CVE crítico aplicado)
@@ -275,16 +279,31 @@ asignación CONJUNTA de envíos pendientes a pools. Fitness multi-objetivo: marg
 cliente + bonus por cruzar umbral FCL. Endpoint /api/admin/optimize-assignment (dry-run por
 defecto, apply=true ejecuta vía joinPoolAtomic). 7 tests en tests/unit/poolOptimizer.test.ts.
 
+**FASE 4 — Diferenciadores competitivos (2 junio 2026):**
+- **Pool Intelligence Engine** (lib/poolIntelligence.ts): velocidad m³/día (ventana 3 días), predicción
+  días hasta FCL, probabilidad FCL crossing (0–1), alerta proactiva a leads cuando pool ≥60%.
+  Dashboard en /admin/autonomia. Flag: pool_alerts_enabled. API: GET /api/admin/pool-intelligence.
+- **WhatsApp Bot** (/api/whatsapp/webhook): canal primario para micro-importadores — cotizar precio
+  en tiempo real, tracking por código FDT, ver pools activos, cómo unirse. Siempre retorna HTTP 200.
+  Verificación GET + mensajes POST. Activar con WHATSAPP_VERIFY_TOKEN en Vercel.
+- **Timeline visual** (/seguimiento): stepper animado 6 pasos con ETAs automáticos + panel ahorro vs casillero.
+
 ### Testing:
 - `npm test` → vitest, 49 unit tests (pricing + poolAssignment + poolOptimizer). vitest.config.ts.
 - `npm run test:e2e` → playwright (requiere browser + acceso a Vercel).
 
+### Feature flags (todos APAGADOS por defecto — toggle en /admin/autonomia):
+- `notifications_enabled` — notificaciones ciclo de vida (requiere WHATSAPP_TOKEN o RESEND_API_KEY)
+- `nurture_enabled` — follow-up automático a leads
+- `optimizer_auto_apply` — GA aplica asignación sin confirmar (migración 017)
+- `pool_alerts_enabled` — alertas proactivas FCL a leads (migración 018)
+
 ### Pendiente técnico (menor):
+- Configurar WHATSAPP_VERIFY_TOKEN + WHATSAPP_TOKEN + WHATSAPP_PHONE_ID en Vercel para activar bot WA
+- O configurar RESEND_API_KEY + NOTIFY_EMAIL_FROM para canal email
 - Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
 - Probar flujo completo E2E: registro → envío → factura → aduana
-- Para activar outreach real: setear WHATSAPP_TOKEN/WHATSAPP_PHONE_ID o RESEND_API_KEY+NOTIFY_EMAIL_FROM
-  en Vercel, luego encender los toggles en /admin/autonomia (notifications_enabled / nurture_enabled).
-  Los flags arrancan APAGADOS por decisión del dueño.
+- Activar flags en /admin/autonomia cuando credenciales estén en Vercel
 
 ### Para retomar en sesión nueva:
 Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
