@@ -22,54 +22,43 @@ if [ -f "/root/.claude/.tokens" ]; then
   git remote set-url origin "https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git" 2>/dev/null || true
 fi
 
-# ── Resumen de contexto para orientar al asistente ─────────────────────────
+# ── Resumen de contexto para el asistente ────────────────────────────────────
 echo ""
-echo "════════════════════════════════════════════════════════════"
-echo "  FINDIT Logistic — Contexto de sesión"
-echo "════════════════════════════════════════════════════════════"
-
-# Fecha y estado del repo
-echo "  Fecha     : $(date '+%Y-%m-%d %H:%M UTC')"
-echo "  Rama      : $(git branch --show-current 2>/dev/null || echo 'unknown')"
-echo "  Último commit: $(git log -1 --format='%h %s' 2>/dev/null || echo 'N/A')"
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║         FINDIT LOGISTIC — CONTEXTO DE SESIÓN             ║"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-# Estado de MEMORIA.md
+# Estado del repo
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "desconocida")
+LAST_COMMIT=$(git log -1 --format="%h %s" 2>/dev/null || echo "sin commits")
+UNPUSHED=$(git rev-list "origin/${BRANCH}..HEAD" --count 2>/dev/null || echo "0")
+
+echo "📁 Proyecto:    FINDIT Logistic (finditcorp/logistic)"
+echo "🌿 Rama:        ${BRANCH}"
+echo "📝 Último commit: ${LAST_COMMIT}"
+if [ "$UNPUSHED" -gt "0" ]; then
+  echo "⚠️  Commits sin push: ${UNPUSHED}"
+fi
+
+# Fecha de última actualización de MEMORIA.md
 if [ -f "MEMORIA.md" ]; then
-  LAST_LINE=$(grep -m1 "Última actualización" MEMORIA.md 2>/dev/null || echo "")
-  echo "  MEMORIA.md: $LAST_LINE"
-else
-  echo "  MEMORIA.md: ⚠️  NO ENCONTRADA"
+  MEMORIA_DATE=$(head -3 MEMORIA.md | grep "Última actualización" | sed 's/.*: //' || echo "desconocida")
+  echo "🧠 MEMORIA.md:  ${MEMORIA_DATE}"
 fi
 
-# Flags activos (si hay acceso a DB — solo informativo)
 echo ""
-echo "  Feature flags (app_settings):"
-echo "    notifications_enabled  — controla notificaciones ciclo de vida"
-echo "    nurture_enabled        — secuencia follow-up a leads"
-echo "    optimizer_auto_apply   — GA aplica sin confirmar"
-echo "    pool_alerts_enabled    — alertas proactivas FCL"
-echo "    Todos arrancan en FALSE. Toggle en /admin/autonomia"
+echo "🌐 Sitio live:  https://logistic-six-alpha.vercel.app"
+echo "🔐 Admin:       /admin/login (enrique.eaguilarh@gmail.com)"
 echo ""
-
-# Rutas clave
-echo "  URLs:"
-echo "    Live   : https://logistic-six-alpha.vercel.app"
-echo "    Admin  : /admin/login  (enrique.eaguilarh@gmail.com)"
-echo "    Cron   : /api/cron/advance-pools  (header: x-cron-secret)"
-echo "    WA Bot : /api/whatsapp/webhook"
+echo "🚦 Feature flags (todos OFF por defecto, toggle en /admin/autonomia):"
+echo "   • notifications_enabled  — notificaciones de ciclo de vida"
+echo "   • nurture_enabled        — nurture automático de leads"
+echo "   • optimizer_auto_apply   — GA optimizer aplica sin confirmar"
+echo "   • pool_alerts_enabled    — alertas proactivas FCL a leads"
 echo ""
-
-# Cambios sin push
-UNPUSHED=$(git rev-list "origin/$(git branch --show-current 2>/dev/null)..HEAD" --count 2>/dev/null) || UNPUSHED=0
-if [ "$UNPUSHED" -gt 0 ]; then
-  echo "  ⚠️  $UNPUSHED commit(s) locales sin push"
-fi
-
-DIRTY=$(git status --porcelain 2>/dev/null | wc -l)
-if [ "$DIRTY" -gt 0 ]; then
-  echo "  ⚠️  $DIRTY archivo(s) con cambios sin commit"
-fi
-
-echo "════════════════════════════════════════════════════════════"
+echo "🔑 Tokens:      $([ -f '/root/.claude/.tokens' ] && echo '✅ Cargados' || echo '❌ FALTAN — pedir al usuario')"
+echo ""
+echo "📌 Para contexto completo: leer MEMORIA.md y CLAUDE.md"
+echo "══════════════════════════════════════════════════════════════"
 echo ""
