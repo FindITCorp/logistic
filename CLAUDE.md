@@ -345,6 +345,24 @@ Los tokens están guardados en `/root/.claude/.tokens` (solo en el contenedor lo
 - Actualizar CLAUDE.md + MEMORIA.md al final de cada sesión
 - Commit + push de ambos archivos junto con cualquier cambio de código
 
+## SKILLS — ACTIVACIÓN AUTOMÁTICA POR TAREA
+
+Estas skills están instaladas en `~/.claude/skills/`. **Invócalas con el tool `Skill` antes de comenzar** según el tipo de tarea:
+
+| Skill | Cuándo invocarla |
+|-------|-----------------|
+| `nextjs-developer` | Cambios en páginas, componentes, App Router, Server Components, rutas API |
+| `vercel-optimize` | Optimización de deploy, Core Web Vitals, Edge Functions, config de Vercel |
+| `qa-expert` | Crear tests, plan QA, cobertura, bugs |
+| `playwright-skill` | Tests E2E, flujos de usuario, pruebas de integración |
+| `debugger` | Diagnosticar errores, analizar stack traces, bugs de producción |
+| `code-review` | Revisar PR, auditar cambios antes de mergear |
+| `security-review` | Auditar seguridad: RLS, auth, rate limiting, OWASP |
+| `deap` | Mejoras al algoritmo genético en `lib/poolOptimizer.ts` |
+| `deep-research` | Investigar competidores, tarifas de forwarders, regulación aduanal |
+
+**Regla:** Si la tarea toca Next.js → invocar `nextjs-developer` primero. Si toca tests → invocar `qa-expert`. Si es un bug → invocar `debugger`. No esperes a que el usuario lo pida.
+
 ## STACK
 
 Next.js 14 + next-intl + Tailwind CSS — repo: FindITCorp/logistic
