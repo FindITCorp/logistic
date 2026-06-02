@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Bot, Send, DollarSign, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
+import { Bot, Send, DollarSign, Sparkles, AlertTriangle, Loader2, Zap, TrendingUp } from 'lucide-react'
 
 interface Settings {
   nurture_enabled: boolean
   notifications_enabled: boolean
   optimizer_auto_apply: boolean
+  pool_alerts_enabled: boolean
 }
 
 interface DebtRow {
@@ -41,12 +42,36 @@ interface OptResult {
   message?: string
 }
 
+interface PoolIntel {
+  poolNumber: number
+  originCity: string
+  currentVolumeM3: number
+  dayNumber: number
+  daysRemaining: number
+  fillRatePct: number
+  velocityM3PerDay: number
+  predictedDaysToFCL: number | null
+  fclCrossingProbability: number
+  recommendedAction: 'join_now' | 'wait_for_fcl' | 'already_fcl' | 'low_data'
+  priceNow: number
+  priceFCL: number
+  savingsPerM3AtFCL: number
+  alertCandidateCount: number
+}
+
+interface IntelData {
+  pools: PoolIntel[]
+  totalAlertCandidates: number
+}
+
 export default function AutonomiaPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [recon, setRecon] = useState<Recon | null>(null)
   const [opt, setOpt] = useState<OptResult | null>(null)
+  const [intel, setIntel] = useState<IntelData | null>(null)
   const [busy, setBusy] = useState(false)
   const [optBusy, setOptBusy] = useState(false)
+  const [intelLoading, setIntelLoading] = useState(false)
 
   async function loadSettings() {
     const r = await fetch('/api/admin/settings')
@@ -58,8 +83,15 @@ export default function AutonomiaPage() {
     const d = await r.json()
     if (d.totals) setRecon(d)
   }
+  async function loadIntel() {
+    setIntelLoading(true)
+    const r = await fetch('/api/admin/pool-intelligence')
+    const d = await r.json()
+    if (d.pools) setIntel(d)
+    setIntelLoading(false)
+  }
 
-  useEffect(() => { loadSettings(); loadRecon() }, [])
+  useEffect(() => { loadSettings(); loadRecon(); loadIntel() }, [])
 
   async function toggle(key: keyof Settings, value: boolean) {
     setBusy(true)
@@ -99,7 +131,6 @@ export default function AutonomiaPage() {
           Activan el envío real de mensajes. Requieren credenciales configuradas (WhatsApp/Resend);
           de lo contrario los mensajes caen al fallback de GitHub o no se envían.
         </p>
-
         <div className="space-y-3">
           <ToggleRow
             icon={<Send className="w-5 h-5" />}
@@ -125,7 +156,61 @@ export default function AutonomiaPage() {
             disabled={busy || !settings}
             onChange={(v) => toggle('optimizer_auto_apply', v)}
           />
+          <ToggleRow
+            icon={<Zap className="w-5 h-5" />}
+            title="Alertas predictivas FCL (Pool Intelligence)"
+            desc="Cuando un pool supera el 60% del umbral FCL, el cron detecta leads del mismo origen y les avisa automáticamente para que entren y todos ahorren más."
+            on={settings?.pool_alerts_enabled ?? false}
+            disabled={busy || !settings}
+            onChange={(v) => toggle('pool_alerts_enabled', v)}
+          />
         </div>
+      </section>
+
+      {/* ── Pool Intelligence ── */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-violet-600" />
+            <h2 className="text-lg font-semibold text-slate-800">Pool Intelligence</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            {intel && (
+              <span className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
+                {intel.totalAlertCandidates} leads listos para alertar
+              </span>
+            )}
+            <button
+              onClick={loadIntel}
+              disabled={intelLoading}
+              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {intelLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+              Actualizar
+            </button>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500 mb-5">
+          Velocidad de llenado en tiempo real, probabilidad de cruzar el umbral FCL (20 m³)
+          y leads candidatos a alerta por pool. La acción recomendada es la misma que el sistema
+          usa para decidir si enviar alertas en el cron diario.
+        </p>
+
+        {intelLoading && !intel && (
+          <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+            <Loader2 className="w-4 h-4 animate-spin" /> Analizando pools...
+          </div>
+        )}
+
+        {intel?.pools.length === 0 && (
+          <p className="text-sm text-slate-400">No hay pools activos para analizar.</p>
+        )}
+
+        {intel && intel.pools.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {intel.pools.map(p => <PoolCard key={p.poolNumber} pool={p} />)}
+          </div>
+        )}
       </section>
 
       {/* ── Optimizador evolutivo ── */}
@@ -235,6 +320,87 @@ export default function AutonomiaPage() {
           <p className="text-sm text-slate-400 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Sin datos de reconciliación todavía.</p>
         )}
       </section>
+    </div>
+  )
+}
+
+// ── Sub-componentes ──────────────────────────────────────────────────────────
+
+const ACTION_CONFIG = {
+  join_now:     { label: 'Entra ya', color: 'text-amber-600 bg-amber-50 border-amber-200' },
+  wait_for_fcl: { label: 'Espera FCL', color: 'text-violet-600 bg-violet-50 border-violet-200' },
+  already_fcl:  { label: 'Ya es FCL', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+  low_data:     { label: 'Poco dato', color: 'text-slate-500 bg-slate-50 border-slate-200' },
+}
+
+function PoolCard({ pool: p }: { pool: PoolIntel }) {
+  const action = ACTION_CONFIG[p.recommendedAction]
+  const fclPct = Math.round(p.fclCrossingProbability * 100)
+
+  return (
+    <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="font-semibold text-slate-800">
+          Pool #{p.poolNumber} · {p.originCity.charAt(0).toUpperCase() + p.originCity.slice(1)}
+        </p>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${action.color}`}>
+          {action.label}
+        </span>
+      </div>
+
+      {/* Barra de llenado FCL */}
+      <div>
+        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+          <span>{p.currentVolumeM3.toFixed(1)} m³ / 20 m³ FCL</span>
+          <span>{Math.round(p.fillRatePct)}%</span>
+        </div>
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              p.fillRatePct >= 100 ? 'bg-emerald-500' :
+              p.fillRatePct >= 60  ? 'bg-violet-500' :
+              p.fillRatePct >= 30  ? 'bg-amber-400' : 'bg-slate-300'
+            }`}
+            style={{ width: `${Math.min(100, p.fillRatePct)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Métricas */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-slate-50 rounded-lg p-2">
+          <p className="text-slate-400">Velocidad</p>
+          <p className="font-semibold text-slate-700">{p.velocityM3PerDay.toFixed(1)} m³/día</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-2">
+          <p className="text-slate-400">Prob. FCL</p>
+          <p className={`font-semibold ${fclPct >= 65 ? 'text-violet-600' : fclPct >= 40 ? 'text-amber-600' : 'text-slate-500'}`}>
+            {fclPct}%
+          </p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-2">
+          <p className="text-slate-400">Día</p>
+          <p className="font-semibold text-slate-700">{p.dayNumber}/10 ({p.daysRemaining}d restantes)</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-2">
+          <p className="text-slate-400">Ahorro si FCL</p>
+          <p className="font-semibold text-emerald-600">${p.savingsPerM3AtFCL.toFixed(0)}/m³</p>
+        </div>
+      </div>
+
+      {/* Precio ahora vs FCL */}
+      <div className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-3 py-2">
+        <span className="text-slate-500">Precio hoy: <span className="font-semibold text-slate-700">${p.priceNow.toFixed(0)}/m³</span></span>
+        <span className="text-slate-300">→</span>
+        <span className="text-slate-500">Si FCL: <span className="font-semibold text-emerald-600">${p.priceFCL.toFixed(0)}/m³</span></span>
+      </div>
+
+      {p.alertCandidateCount > 0 && (
+        <p className="text-xs text-violet-600 font-medium flex items-center gap-1">
+          <Zap className="w-3 h-3" />
+          {p.alertCandidateCount} lead{p.alertCandidateCount > 1 ? 's' : ''} listo{p.alertCandidateCount > 1 ? 's' : ''} para alertar
+        </p>
+      )}
     </div>
   )
 }

@@ -17,6 +17,7 @@ const patchSchema = z.object({
   nurture_enabled: z.boolean().optional(),
   notifications_enabled: z.boolean().optional(),
   optimizer_auto_apply: z.boolean().optional(),
+  pool_alerts_enabled: z.boolean().optional(),
 })
 
 // PATCH /api/admin/settings — encender/apagar flags en runtime (sin redeploy)
@@ -33,6 +34,8 @@ export async function PATCH(req: NextRequest) {
       await setSetting('notifications_enabled', input.notifications_enabled, session!.email)
     if (input.optimizer_auto_apply !== undefined)
       await setSetting('optimizer_auto_apply', input.optimizer_auto_apply, session!.email)
+    if (input.pool_alerts_enabled !== undefined)
+      await setSetting('pool_alerts_enabled', input.pool_alerts_enabled, session!.email)
 
     const settings = await getAllSettings()
     return NextResponse.json({ ok: true, settings })

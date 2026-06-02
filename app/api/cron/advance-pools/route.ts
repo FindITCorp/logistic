@@ -8,6 +8,7 @@ import { isEnabled } from '@/lib/settings'
 import { optimizeAssignment } from '@/lib/poolOptimizer'
 import type { OptShipment, OptPool } from '@/lib/poolOptimizer'
 import { joinPoolAtomic, mapJoinError } from '@/lib/poolAssignment'
+import { findAlertCandidates } from '@/lib/poolIntelligence'
 import type { OriginCity } from '@/lib/supabase/database.types'
 
 // ─── FINDIT Autopilot ─────────────────────────────────────────────────────────
@@ -19,7 +20,8 @@ import type { OriginCity } from '@/lib/supabase/database.types'
 //   4. Guarantee every origin always has one active pool to join
 //   5. Sync shipment lifecycle status to pool status
 //   6. Evolutionary optimizer — best assignment of pending shipments to pools
-//   7. Process due lead follow-ups (autonomous nurture)
+//   7. Pool intelligence alerts — notify leads when pool approaches FCL threshold
+//   8. Process due lead follow-ups (autonomous nurture)
 // Protected by CRON_SECRET.
 
 const ORIGINS: OriginCity[] = ['shanghai', 'guangzhou', 'shenzhen']
@@ -190,7 +192,44 @@ export async function GET(req: NextRequest) {
     report.optimized.push(`GA ERROR: ${e instanceof Error ? e.message : 'desconocido'}`)
   }
 
-  // ── 7. Autonomous lead nurture ─────────────────────────────────────────────
+  // ── 7. Pool intelligence alerts — leads cuando pool ≥60% FCL ────────────
+  // Detecta pools cerca del umbral FCL y avisa a leads de ese origen para que
+  // entren ahora — ellos ahorran más, el pool llena antes.
+  // Gated detrás de pool_alerts_enabled (igual que nurture).
+  if (await isEnabled('pool_alerts_enabled')) {
+    try {
+      const alertCandidates = await findAlertCandidates(db)
+      for (const alert of alertCandidates) {
+        const city = alert.poolOriginCity.charAt(0).toUpperCase() + alert.poolOriginCity.slice(1)
+        const optoutUrl = alert.leadOptoutToken
+          ? `${SITE}/api/leads/optout?token=${alert.leadOptoutToken}`
+          : null
+        const body =
+          `Hola ${alert.leadName} 👋\n\n` +
+          `🚢 El Pool #${alert.poolNumber} (${city} → Panamá) está al ` +
+          `${Math.round(alert.fillRatePct)}% del umbral de contenedor completo (FCL).\n\n` +
+          `💰 Si entras HOY puedes ahorrar *$${alert.potentialSavingsUsd.toFixed(0)}* adicionales ` +
+          `cuando el pool cruce el umbral FCL.\n` +
+          `Probabilidad de cruce: ${Math.round(alert.fclCrossingProbability * 100)}%\n\n` +
+          `👉 Reserva tu espacio ahora:\n${SITE}/pools/${alert.poolNumber}\n` +
+          (optoutUrl ? `\nNo recibir más alertas: ${optoutUrl}` : '')
+        const res = await notify(
+          { whatsapp: alert.leadWhatsapp, email: alert.leadEmail, name: alert.leadName },
+          `Pool #${alert.poolNumber} casi completo — ahorra $${alert.potentialSavingsUsd.toFixed(0)} más`,
+          body,
+        )
+        if (res.ok) {
+          report.nurtured.push(
+            `FCL-alert: ${alert.leadName} → Pool #${alert.poolNumber} ($${alert.potentialSavingsUsd.toFixed(0)}, ${res.channel})`,
+          )
+        }
+      }
+    } catch (e) {
+      report.nurtured.push(`FCL-alerts ERROR: ${e instanceof Error ? e.message : 'desconocido'}`)
+    }
+  }
+
+  // ── 8. Autonomous lead nurture ─────────────────────────────────────────────
   // Gated behind the nurture_enabled flag (app_settings, with NURTURE_ENABLED
   // env fallback) so outbound outreach stays OFF until the owner turns it on
   // from the admin UI. Everything else in the autopilot runs regardless.
