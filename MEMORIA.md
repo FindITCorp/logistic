@@ -1,7 +1,41 @@
 # FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 2 de junio de 2026
+**Última actualización:** 3 de junio de 2026
 **Dueño:** FindITCorp
 **Estado:** 🟢 MVP TÉCNICO COMPLETO EN PRODUCCIÓN | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
+
+---
+
+## ⭐ PROYECTO NUEVO — RIFA MUNDIAL 2026
+
+**Repo:** https://github.com/FindITCorp/rifa-mundial
+**Stack:** Next.js 14 + Supabase + Stripe + Vercel Cron
+**Estado:** 🟢 CÓDIGO COMPLETO — PENDIENTE DEPLOY EN VERCEL + CREDENCIALES
+
+### Para activar el deploy:
+1. Ir a vercel.com → New Project → Import `FindITCorp/rifa-mundial`
+2. Configurar env vars del `.env.example` (Supabase, Stripe, etc.)
+3. Ejecutar migraciones Supabase: `supabase/migrations/001_schema.sql` y `002_seed_influencers.sql`
+4. Crear admin: INSERT en `admin_users` con `hashPassword()` de `lib/auth.ts`
+5. Activar cron en Vercel (ya configurado en `vercel.json`)
+
+### Sistema autónomo incluye:
+- 10M boletos con numeración única e irrepetible
+- Sorteo criptográfico (SHA-512 + Bitcoin block hash) — 3 ganadores
+- Stripe Checkout + webhook automático para asignación post-pago
+- Cron diario 12:00 — publica posts en Twitter/FB/IG + outreach a 5 influencers
+- 25 influencers pre-cargados (mega→nano) con mensajes de outreach personalizados
+- Sistema de referidos: 10 referidos = 1 boleto gratis automático
+- Premios: Tim Payne (NZ), Cristiano o Messi, la restante
+- Admin: /admin/dashboard · /admin/sorteo · /admin/social · /admin/influencers
+
+### Credenciales necesarias (pedir al usuario):
+- SUPABASE_URL + SUPABASE_ANON_KEY + SUPABASE_SERVICE_KEY
+- STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET
+- TWITTER_BEARER_TOKEN, FACEBOOK_PAGE_TOKEN, INSTAGRAM_ACCESS_TOKEN (opcional)
+- RESEND_API_KEY (para emails de confirmación)
+- CRON_SECRET + ADMIN_SALT (strings secretos que tú defines)
+
+---
 
 ---
 
