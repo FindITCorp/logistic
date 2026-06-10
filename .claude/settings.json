@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(python3 *)",
+      "Bash(source /root/.claude/.tokens*)",
+      "Bash(cd /home/user/logistic*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/user/logistic/.claude/session_start.sh",
+            "timeout": 60,
+            "statusMessage": "Iniciando sesión WC2026..."
+          }
+        ]
+      }
+    ]
+  }
+}
