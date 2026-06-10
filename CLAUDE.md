@@ -303,7 +303,8 @@ contenedor local del usuario. Verificado empíricamente:
 | Recurso | Estado | Detalle |
 |---------|--------|---------|
 | `/root/.claude/.tokens` | ❌ NO existe | Contenedor fresco; no pedir push con token, usar remote `origin` |
-| Remote `origin` | ✅ Proxy de sesión | `http://local_proxy@127.0.0.1:<puerto>/git/FindITCorp/logistic` — push autorizado SOLO a este repo |
+| Remote `origin` | ⚠️ Proxy de sesión | `git push` autorizado SOLO a la rama designada de esa sesión (`claude/<nombre>-<id>`); push a `claude/sleepy-bohr-PDVSt` desde otra sesión → 403 |
+| Escribir a este branch | ❌ BLOQUEADO | git push → 403 y MCP `push_files` → 403 ("Resource not accessible by integration"): la sesión web SOLO escribe en SU rama designada. El trabajo se deja en `handoff/mundial2026/` de la rama de esa sesión |
 | Repo `FindITCorp/Mundial2026-` | ❌ BLOQUEADO | Proxy responde "repository not authorized" — hay que agregarlo al scope de la sesión al crearla |
 | `/home/user/mundial2026` | ❌ NO existe | Solo se clona el repo de la sesión; trabajar en worktree de esta rama |
 | `api.github.com` | ❌ 403 | APIs GitHub solo via tools MCP de la sesión |
