@@ -283,8 +283,10 @@ python3 scripts/weekly_calibration.py
 ✅ Backtest reproducido 10-jun: 67.4% accuracy, Brier 0.4649 (491 partidos, A/B veterano +0.4pp)
 ✅ Simulador torneo: ~1.2s/3000 sims
 ✅ sofascore_intake.py: listo para recibir datos
-✅ wc_matches RECONSTRUIDA con calendario real (72 fixtures validados vs wc_group_draw)
-✅ Predicciones jornada inaugural 11–13 jun generadas (20 partidos)
+⚠️  wc_matches: la DB committeada trae fixtures FICTICIOS pre-sorteo —
+    EJECUTAR `python3 scripts/rebuild_wc_matches.py` y commitear la DB
+    (la sesión web del 10-jun lo corrigió localmente pero no pudo pushear la DB binaria)
+✅ Predicciones jornada inaugural 11–13 jun generadas (20 partidos, ver reporte sesión 10-jun)
 ⚠️  Squads oficiales: 10/48 equipos confirmados
 ⚠️  Sofascore: esperando datos (Czechia vs DEN/CRO)
 🔴 match_lineups: vacío (desde 11-jun-2026)
@@ -316,6 +318,8 @@ principal `Mundial2026-`, el usuario debe incluirlo en el scope al crear la sesi
 
 ## TAREAS PENDIENTES AL INICIAR NUEVA SESION
 
+0. **`python3 scripts/rebuild_wc_matches.py`** si `SELECT home_team_name FROM wc_matches WHERE id=1`
+   no devuelve "Mexico" (vs South Africa) — luego commitear `data/mundial2026.db`
 1. Ejecutar protocolo de arranque completo
 2. Verificar que el test del modelo pasa sin errores
 3. Si el usuario provee datos de partidos → cargar con sofascore_intake.py
