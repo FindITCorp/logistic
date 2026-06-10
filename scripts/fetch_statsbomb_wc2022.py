@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 
 BASE_URL = "https://raw.githubusercontent.com/statsbomb/open-data/master/data"
-DB_PATH = "/home/user/mundial2026/data/mundial2026.db"
+DB_PATH = "/home/user/logistic/data/mundial2026.db"
 
 
 def get_matches():
@@ -163,7 +163,7 @@ def main():
 
     output.sort(key=lambda x: x.get('key_passes', 0) + x.get('progressive_carries', 0), reverse=True)
 
-    with open('/home/user/mundial2026/data/processed/wc2022_player_stats.json', 'w') as f:
+    with open('/home/user/logistic/data/processed/wc2022_player_stats.json', 'w') as f:
         json.dump(output, f, indent=2)
 
     print("Saved to data/processed/wc2022_player_stats.json")
