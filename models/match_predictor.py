@@ -8,10 +8,14 @@ Factores ponderados:
   12% Rating promedio XI titular
   10% Set pieces & corners efficiency
    8% Posesión proyectada / pressing matchup
+  + Factor multiplicativo de experiencia mundialista (±4.5% sobre λ):
+    veteranos WC2018/WC2022 en plantilla de 26 y XI proyectado.
+    stage="knockout" aumenta la sensibilidad (presión, penales).
 
 Uso:
     from models.match_predictor import predict_match
-    r = predict_match(home_id, away_id, neutral=True)
+    r = predict_match(home_id, away_id, neutral=True)            # fase de grupos
+    r = predict_match(home_id, away_id, stage="knockout")        # eliminatorias
     print(r)
 """
 
@@ -19,6 +23,12 @@ import sqlite3
 import math
 import logging
 from pathlib import Path
+
+from models.veteran_experience import (
+    get_team_veteran_stats,
+    get_global_exp_mean,
+    veteran_lambda_factor,
+)
 
 DB_PATH = Path(__file__).parent.parent / "data" / "mundial2026.db"
 log = logging.getLogger("predictor")
@@ -794,6 +804,7 @@ def predict_match(
     away_absence: float = 0.0,
     db_path: str | Path = DB_PATH,
     use_strength: bool = True,   # activar mejora HAS/HDS/AAS/ADS
+    stage: str = "group",        # "group" | "knockout" — sensibilidad del factor veterano
 ) -> dict:
     """
     Retorna un dict completo con predicción, probabilidades, métricas y breakdown.
@@ -826,6 +837,13 @@ def predict_match(
     if use_strength:
         h_str = _get_attack_defense_strength(conn, home_id, db_key)
         a_str = _get_attack_defense_strength(conn, away_id, db_key)
+
+    # Experiencia mundialista (WC2018/WC2022 → wc26_squad + projected_lineups)
+    h_vet = get_team_veteran_stats(conn, home_id, db_key)
+    a_vet = get_team_veteran_stats(conn, away_id, db_key)
+    vet_mean = get_global_exp_mean(conn, db_key)
+    h_vet_f = veteran_lambda_factor(h_vet["exp_score"], vet_mean, stage)
+    a_vet_f = veteran_lambda_factor(a_vet["exp_score"], vet_mean, stage)
 
     home_name = conn.execute("SELECT name FROM teams WHERE id=?", (home_id,)).fetchone()["name"]
     away_name = conn.execute("SELECT name FROM teams WHERE id=?", (away_id,)).fetchone()["name"]
@@ -959,6 +977,7 @@ def predict_match(
         * (1.0 / max(0.88, a_def_xi["combined"]) if a_def_xi["has_data"] else 1.0)
         * h2h_hf
         * venue_h
+        * h_vet_f                                    # experiencia mundialista (±4.5%)
         * (1 - home_absence)
     )
     la_raw = (
@@ -977,6 +996,7 @@ def predict_match(
         * (1.0 / max(0.88, h_def_xi["combined"]) if h_def_xi["has_data"] else 1.0)
         * h2h_af
         * venue_a
+        * a_vet_f                                    # experiencia mundialista (±4.5%)
         * (1 - away_absence)
     )
 
@@ -1162,6 +1182,14 @@ def predict_match(
         "pressing_away":   round(away_tac["pressing_intensity"], 2),
         "tac_matchup_home": round(h_tac_f, 3),   # ventaja/desventaja táctica del local
         "tac_matchup_away": round(a_tac_f, 3),   # ventaja/desventaja táctica del visitante
+        # Experiencia mundialista (WC2018/22)
+        "veteran_pct_home":  round(h_vet["squad_vet_pct"] * 100, 1),
+        "veteran_pct_away":  round(a_vet["squad_vet_pct"] * 100, 1),
+        "veteran_xi_home":   round(h_vet["xi_vet_pct"] * 100, 1),
+        "veteran_xi_away":   round(a_vet["xi_vet_pct"] * 100, 1),
+        "veteran_factor_home": round(h_vet_f, 4),
+        "veteran_factor_away": round(a_vet_f, 4),
+        "stage": stage,
         # Top marcadores
         "top_scores":      [(f"{s[0]}-{s[1]}", round(p / prob_total_raw * 100, 1))
                             for s, p in top_scores[:6]],
@@ -1193,6 +1221,12 @@ def predict_match(
             "cre_xi_away":      a_cre_xi,
             "xi_matchup_home":  round(h_xi_matchup, 3),
             "xi_matchup_away":  round(a_xi_matchup, 3),
+            # Experiencia mundialista
+            "vet_exp_home":     h_vet["exp_score"],
+            "vet_exp_away":     a_vet["exp_score"],
+            "vet_mean":         round(vet_mean, 4),
+            "vet_factor_home":  round(h_vet_f, 4),
+            "vet_factor_away":  round(a_vet_f, 4),
         },
         # Forma reciente
         "form_home":       home_form["last5"],
