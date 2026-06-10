@@ -99,12 +99,20 @@ mundial2026/
     seed_wc_groups.py              — ★ Sorteo valido 12 grupos de 4 (bombos Elo)
                                      → tabla wc_group_draw (datos de grupos limpios)
     validate_squads.py             — Validador de integridad de plantillas
+    validate_model.py              — ★ Backtest A/B del modelo vs resultados reales
+                                     (accuracy ganador + Brier + draw recall;
+                                     baseline 2026-06: 57.3% acc, Brier 0.546, n=227)
     update_official_squads_may2026.py — Squads oficiales confirmados (10 equipos)
 
   models/
     predictor.py                   — Motor prediccion clasico (predict_match, TeamSnapshot)
     match_predictor.py             — ★ Motor Poisson 6-factores (Elo+xG+forma+XI+BP+pressing)
                                      con strength-of-schedule, regularizacion y ancla Elo
+                                     + factor experiencia mundialista (stage=group/knockout,
+                                     use_veteran para A/B testing)
+    veteran_experience.py          — ★ Experiencia WC2018/22 por plantilla y XI proyectado
+                                     (matching 3 niveles id/nombre/tokens). Factor λ ±4.5%,
+                                     edge penales ±2.5pp, ajuste presión vs elite -3% max
     elo.py                         — Sistema Elo dinamico (EloSystem, build_from_history)
     player_rating.py               — Rating 1-10 (PlayerRatingEngine, compute_all_ratings)
     simulator.py                   — Simulador Poisson 10,000 iteraciones (simulate_match)
@@ -124,7 +132,9 @@ mundial2026/
     full_match_sim.py              — ★ Simulador integral 1 partido (Monte Carlo):
                                      marcador + goleadores + eventos + arbitro + mercados
     tournament.py                  — ★ Monte Carlo del torneo completo (grupos→final):
-                                     P(campeon/semis/etc) por equipo, ~1.2s/3000 torneos
+                                     P(campeon/semis/etc) por equipo, ~1.6s/3000 torneos
+                                     Integra: experiencia veterana (group/ko), presion vs
+                                     elite, edge veterano en penales Markov, fatiga
 
   pipelines/
     full_update.py                 — Orquestador maestro (--scope all/squads/stats/form/lineups/wc/historical)

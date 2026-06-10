@@ -31,6 +31,7 @@ from models.veteran_experience import (
     get_global_exp_mean,
     veteran_lambda_factor,
     veteran_shootout_edge,
+    pressure_adjustment,
 )
 
 DB_PATH = Path(__file__).parent.parent / "data" / "mundial2026.db"
@@ -69,6 +70,7 @@ class TournamentSimulator:
         all_ids = [tid for ids in self.groups.values() for tid in ids]
         db_key = str(self.db_path)
         vet_mean = get_global_exp_mean(conn, db_key)
+        self.vet_mean = vet_mean
         for tid in all_ids:
             elo_row = conn.execute("SELECT elo FROM team_elo WHERE team_id=?", (tid,)).fetchone()
             nm_row = conn.execute("SELECT name FROM teams WHERE id=?", (tid,)).fetchone()
@@ -111,6 +113,10 @@ class TournamentSimulator:
         vet_key = "vet_f_ko" if knockout else "vet_f_group"
         lh *= sh[vet_key]
         la *= sa[vet_key]
+
+        # Presión vs elite: inexpertos sub-convierten ante rivales muy superiores
+        lh *= pressure_adjustment(sh["vet_exp"], self.vet_mean, sh["elo"], sa["elo"])
+        la *= pressure_adjustment(sa["vet_exp"], self.vet_mean, sa["elo"], sh["elo"])
 
         # Localía de anfitriones
         if not neutral:

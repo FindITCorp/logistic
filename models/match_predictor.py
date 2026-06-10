@@ -28,6 +28,7 @@ from models.veteran_experience import (
     get_team_veteran_stats,
     get_global_exp_mean,
     veteran_lambda_factor,
+    pressure_adjustment,
 )
 
 DB_PATH = Path(__file__).parent.parent / "data" / "mundial2026.db"
@@ -805,6 +806,7 @@ def predict_match(
     db_path: str | Path = DB_PATH,
     use_strength: bool = True,   # activar mejora HAS/HDS/AAS/ADS
     stage: str = "group",        # "group" | "knockout" — sensibilidad del factor veterano
+    use_veteran: bool = True,    # activar factor experiencia mundialista (A/B testing)
 ) -> dict:
     """
     Retorna un dict completo con predicción, probabilidades, métricas y breakdown.
@@ -844,6 +846,14 @@ def predict_match(
     vet_mean = get_global_exp_mean(conn, db_key)
     h_vet_f = veteran_lambda_factor(h_vet["exp_score"], vet_mean, stage)
     a_vet_f = veteran_lambda_factor(a_vet["exp_score"], vet_mean, stage)
+    # Presión vs elite: inexpertos sub-convierten ante rivales muy superiores
+    h_press_adj = pressure_adjustment(h_vet["exp_score"], vet_mean, home_elo, away_elo)
+    a_press_adj = pressure_adjustment(a_vet["exp_score"], vet_mean, away_elo, home_elo)
+    h_vet_f *= h_press_adj
+    a_vet_f *= a_press_adj
+    if not use_veteran:
+        h_vet_f = a_vet_f = 1.0
+        h_press_adj = a_press_adj = 1.0
 
     home_name = conn.execute("SELECT name FROM teams WHERE id=?", (home_id,)).fetchone()["name"]
     away_name = conn.execute("SELECT name FROM teams WHERE id=?", (away_id,)).fetchone()["name"]
@@ -1227,6 +1237,8 @@ def predict_match(
             "vet_mean":         round(vet_mean, 4),
             "vet_factor_home":  round(h_vet_f, 4),
             "vet_factor_away":  round(a_vet_f, 4),
+            "pressure_adj_home": round(h_press_adj, 4),
+            "pressure_adj_away": round(a_press_adj, 4),
         },
         # Forma reciente
         "form_home":       home_form["last5"],

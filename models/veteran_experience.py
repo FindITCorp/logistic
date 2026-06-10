@@ -232,6 +232,36 @@ def veteran_shootout_edge(exp_h: float, exp_a: float) -> float:
     return max(-0.025, min(0.025, (exp_h - exp_a) * 0.08))
 
 
+# Ajuste por presión vs elites: equipos SIN experiencia mundialista
+# sub-convierten frente a rivales mucho más fuertes.
+# Evidencia (eliminatorias 2025-26): Czechia (exp=0.00) generó 0.46-0.70 xG
+# y 0 goles vs Denmark/Croatia, pero 2.00 xG y 2 goles vs Ireland.
+# Equipos veteranos mantienen su output vs elites (Croatia, Morocco WC2022).
+PRESSURE_ELO_GAP = 80.0     # gap de Elo a partir del cual aplica
+PRESSURE_MAX_PEN = 0.030    # penalización máxima de λ: -3%
+
+
+def pressure_adjustment(exp_score: float, global_mean: float,
+                        own_elo: float, opp_elo: float) -> float:
+    """
+    Multiplicador λ extra cuando un equipo INEXPERTO enfrenta a un rival
+    claramente superior (opp_elo - own_elo > PRESSURE_ELO_GAP).
+
+    - exp_score >= media global → sin penalización (resisten la presión)
+    - exp_score = 0 y gap grande → hasta -3% adicional
+    Escala lineal en ambas dimensiones (déficit de experiencia × tamaño del gap).
+    """
+    gap = opp_elo - own_elo
+    if gap <= PRESSURE_ELO_GAP:
+        return 1.0
+    exp_deficit = max(0.0, (global_mean - exp_score) / max(global_mean, 0.05))
+    if exp_deficit <= 0:
+        return 1.0
+    gap_scale = min(1.0, (gap - PRESSURE_ELO_GAP) / 200.0)   # satura a gap=280
+    pen = PRESSURE_MAX_PEN * exp_deficit * gap_scale
+    return 1.0 - pen
+
+
 def clear_cache() -> None:
     _CACHE.clear()
 
