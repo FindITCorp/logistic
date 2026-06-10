@@ -140,7 +140,7 @@ print('api-sports:', r.status_code, r.json().get('response',{}).get('requests',{
 | `player_nat_stats` | 34,786 | Stats selección; StatsBomb WC2022+WC2018 |
 | `player_ratings` | 1,048 | Ratings 1-10 calculados; context=club/nat |
 | `match_players` | 3,476 | Por jugador por partido (WC2018: 1647, WC2022: 1829) |
-| `wc_matches` | 72 | Calendario WC2026 |
+| `wc_matches` | 72 | Calendario REAL fase de grupos (reconstruido 10-jun, ver abajo) |
 | `wc_group_draw` | 48 | Sorteo oficial: team_id, grp (A-L) |
 | `wc_history` | 181 | Historial WC 2014/2018/2022 |
 | `match_lineups` | 0 | Alineaciones confirmadas (desde 11-jun-2026) |
@@ -266,26 +266,51 @@ python3 scripts/weekly_calibration.py
 | `UNIQUE constraint failed` | Inserción duplicada | Usar `INSERT OR IGNORE` |
 | Commits "Unverified" en GitHub | Email incorrecto | `git config user.email "noreply@anthropic.com"` |
 | APIs externas 403 | Política de red | Solo via GitHub Actions con GitHub Secrets |
+| wc_matches con fixtures ficticios | Sembrada antes del sorteo oficial (ej. Italy vs Germany — Italia NO clasificó) | CORREGIDO 10-jun: `python3 scripts/rebuild_wc_matches.py` reconstruye desde `data/static/schedule_wc2026.json` validando contra `wc_group_draw` |
 
 ---
 
 ## ESTADO ACTUAL DEL PROYECTO
 
-**Última actualización:** 10 junio 2026
+**Última actualización:** 10 junio 2026 (noche — víspera del torneo)
 **Rama activa:** `claude/sleepy-bohr-PDVSt`
 **Torneo comienza:** 11 junio 2026
 
 ```
-✅ DB: 26,573 partidos históricos
-✅ Elo: 79 equipos
+✅ DB: 26,569 partidos históricos (team_matches; último: 2026-06-03)
+✅ Elo: 198 equipos
 ✅ Modelo: 7 factores integrados + veteranos WC
-✅ Backtest: 67.4% accuracy (491 partidos)
+✅ Backtest reproducido 10-jun: 67.4% accuracy, Brier 0.4649 (491 partidos, A/B veterano +0.4pp)
 ✅ Simulador torneo: ~1.2s/3000 sims
 ✅ sofascore_intake.py: listo para recibir datos
+✅ wc_matches RECONSTRUIDA con calendario real (72 fixtures validados vs wc_group_draw)
+✅ Predicciones jornada inaugural 11–13 jun generadas (20 partidos)
 ⚠️  Squads oficiales: 10/48 equipos confirmados
 ⚠️  Sofascore: esperando datos (Czechia vs DEN/CRO)
 🔴 match_lineups: vacío (desde 11-jun-2026)
+🔴 Calibración: solo 2 partidos nuevos desde 2-jun → NO recalibrar aún (umbral 20+)
 ```
+
+---
+
+## ENTORNO "CLAUDE CODE ON THE WEB" — LÍMITES VERIFICADOS (10-jun-2026)
+
+Cuando la sesión corre en la web (contenedor efímero), el entorno difiere del
+contenedor local del usuario. Verificado empíricamente:
+
+| Recurso | Estado | Detalle |
+|---------|--------|---------|
+| `/root/.claude/.tokens` | ❌ NO existe | Contenedor fresco; no pedir push con token, usar remote `origin` |
+| Remote `origin` | ✅ Proxy de sesión | `http://local_proxy@127.0.0.1:<puerto>/git/FindITCorp/logistic` — push autorizado SOLO a este repo |
+| Repo `FindITCorp/Mundial2026-` | ❌ BLOQUEADO | Proxy responde "repository not authorized" — hay que agregarlo al scope de la sesión al crearla |
+| `/home/user/mundial2026` | ❌ NO existe | Solo se clona el repo de la sesión; trabajar en worktree de esta rama |
+| `api.github.com` | ❌ 403 | APIs GitHub solo via tools MCP de la sesión |
+| `pypi.org` | ✅ 200 | `pip install` funciona |
+| APIs fútbol (api-sports, etc.) | ❌ Bloqueadas | Igual que local: solo via GitHub Actions |
+
+**Implicación:** desde una sesión web SOLO se puede trabajar y pushear este branch
+(`claude/sleepy-bohr-PDVSt` u otro `claude/*` de logistic). Para tocar el repo
+principal `Mundial2026-`, el usuario debe incluirlo en el scope al crear la sesión.
 
 ---
 
