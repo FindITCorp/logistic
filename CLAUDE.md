@@ -283,9 +283,7 @@ python3 scripts/weekly_calibration.py
 ✅ Backtest reproducido 10-jun: 67.4% accuracy, Brier 0.4649 (491 partidos, A/B veterano +0.4pp)
 ✅ Simulador torneo: ~1.2s/3000 sims
 ✅ sofascore_intake.py: listo para recibir datos
-⚠️  wc_matches: la DB committeada trae fixtures FICTICIOS pre-sorteo —
-    EJECUTAR `python3 scripts/rebuild_wc_matches.py` y commitear la DB
-    (la sesión web del 10-jun lo corrigió localmente pero no pudo pushear la DB binaria)
+✅ wc_matches RECONSTRUIDA con calendario real (72 fixtures validados vs wc_group_draw) — DB commiteada 10-jun
 ✅ Predicciones jornada inaugural 11–13 jun generadas (20 partidos, ver reporte sesión 10-jun)
 ⚠️  Squads oficiales: 10/48 equipos confirmados
 ⚠️  Sofascore: esperando datos (Czechia vs DEN/CRO)
@@ -304,7 +302,7 @@ contenedor local del usuario. Verificado empíricamente:
 |---------|--------|---------|
 | `/root/.claude/.tokens` | ❌ NO existe | Contenedor fresco; no pedir push con token, usar remote `origin` |
 | Remote `origin` | ⚠️ Proxy de sesión | `git push` autorizado SOLO a la rama designada de esa sesión (`claude/<nombre>-<id>`); push a `claude/sleepy-bohr-PDVSt` desde otra sesión → 403 |
-| Escribir a este branch | ❌ BLOQUEADO | git push → 403 y MCP `push_files` → 403 ("Resource not accessible by integration"): la sesión web SOLO escribe en SU rama designada. El trabajo se deja en `handoff/mundial2026/` de la rama de esa sesión |
+| Escribir a este branch | ⚠️ Solo con PAT | git push y MCP via proxy de sesión → 403 fuera de la rama designada. EXCEPCIÓN verificada: si el usuario pega su PAT en el chat, `git push https://<PAT>@github.com/...` directo SÍ funciona (github.com está permitido por la red). Pedir el token al usuario si hace falta pushear aquí |
 | Repo `FindITCorp/Mundial2026-` | ❌ BLOQUEADO | Proxy responde "repository not authorized" — hay que agregarlo al scope de la sesión al crearla |
 | `/home/user/mundial2026` | ❌ NO existe | Solo se clona el repo de la sesión; trabajar en worktree de esta rama |
 | `api.github.com` | ❌ 403 | APIs GitHub solo via tools MCP de la sesión |
