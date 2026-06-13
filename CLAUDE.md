@@ -1,368 +1,114 @@
-# INSTRUCCIONES CRÍTICAS — FINDIT Logistic
+# CLAUDE.md
 
-## ⚠️ LEE ESTO PRIMERO ANTES DE RESPONDER CUALQUIER MENSAJE
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Estás trabajando en el proyecto **FINDIT Logistic** — consolidador de carga LCL China → Panamá.
+## Session Bootstrap
 
-### AL INICIAR SESIÓN — ejecuta esto en bash inmediatamente:
+Run this immediately at session start:
 ```bash
 source /root/.claude/.tokens 2>/dev/null; git remote set-url origin https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git 2>/dev/null || true
 ```
 
-### CUANDO EL USUARIO ESCRIBA "continuamos":
-Responde EXACTAMENTE así (no uses ningún tool de memoria, no digas que no tienes contexto):
-
+When the user writes `continuamos`:
 > "Contexto cargado. Estamos en el proyecto FINDIT Logistic — MVP técnico deployado en Vercel. ¿En qué seguimos?"
 
-**NO uses el tool de memoria del sistema. NO digas "no tengo memorias guardadas". El contexto completo está en este archivo.**
+---
+
+## Commands
+
+```bash
+npm run dev          # Next.js dev server (localhost:3000)
+npm run build        # Production build
+npm run lint         # ESLint
+npm run typecheck    # tsc --noEmit (no emit, just type errors)
+npm test             # Vitest unit tests (tests/unit/)
+npm run test:watch   # Vitest in watch mode
+npm run test:e2e     # Playwright E2E (requires live Vercel URL)
+
+# Run a single unit test file:
+npx vitest run tests/unit/pricing.test.ts
+
+# Database
+npm run db:push      # Apply pending migrations to Supabase
+npm run db:types     # Regenerate TypeScript types from Supabase schema
+```
 
 ---
 
-## ESTADO COMPLETO DEL PROYECTO
+## Architecture
 
-# FINDIT — MEMORIA DEL PROYECTO
-**Última actualización:** 2 de junio de 2026
-**Dueño:** FindITCorp
-**Estado:** 🟢 MVP TÉCNICO CONSTRUIDO Y DEPLOYADO | 🔴 SUPUESTOS SIN VALIDAR | ⏳ EN VALIDACIÓN OPERACIONAL
+**Stack:** Next.js 14 App Router · Supabase (PostgreSQL) · next-intl · Tailwind · Vercel
 
----
+**Live:** https://logistic-six-alpha.vercel.app | **Admin:** /admin/login
 
-## 1. DEFINICIÓN DEL PROYECTO
+### Directory Layout
 
-### Nombre oficial
-**Dynamic Price Pooling — Consolidador Logístico LCL China → Panamá**
-
-### Problema
-Micro-importadores en Panamá pagan $400-800/m³ (DDP) cuando tarifa base LCL es $80-150/m³. No acceden a economías de escala. **Gap: $250-700/m³ sin explotar.**
-
-### Solución
-Plataforma que agrupa cargas en pools de 10 días, negocia automáticamente con forwarders según volumen real, distribuye ahorro de forma dinámica y transparente.
-
----
-
-## 2. ESTADO TÉCNICO DEL MVP (ACTUALIZADO)
-
-### Repositorio
-- **GitHub:** finditcorp/logistic
-- **Rama de trabajo:** `main` (deploy automático desde main)
-- **Deploy:** Vercel — **URL LIVE: https://logistic-six-alpha.vercel.app**
-- **Vercel proyecto:** `logistic` | projectId: `prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5` | orgId: `team_BrCUd1PJnqaQTOuhJFrDYsw3`
-- **Stack:** Next.js 14 + next-intl + Tailwind CSS
-
-### Estructura del proyecto
 ```
 app/
-  [locale]/
-    page.tsx          — Landing page completa (4 secciones)
-    pools/page.tsx    — Página de pools activos
-    layout.tsx        — Layout con selector de idioma
-components/
-  Header.tsx          — Nav con ES|EN switcher
-  LanguageSwitcher.tsx
-  PoolCard.tsx        — Tarjeta de pool con precios dinámicos
-  PricingTierTable.tsx — Tabla interactiva con slider
+  api/              — Route Handlers (all data access is server-side)
+  [locale]/         — i18n pages (ES default, /en for English)
+    admin/          — Auth-gated backoffice
 lib/
-  pricing.ts          — Motor de precios dinámico ✅ CORRECTO
-messages/
-  es.json             — Traducciones completas español
-  en.json             — Traducciones completas inglés
-middleware.ts         — Routing i18n (ES default, /en para inglés)
+  pricing.ts        — Pricing engine (source of truth; mirrored in SQL)
+  poolAssignment.ts — Pool join logic (delegates to join_pool() SQL fn)
+  poolOptimizer.ts  — Genetic algorithm for batch shipment assignment
+  poolIntelligence.ts — FCL velocity predictions + proactive alerts
+  notify.ts         — Unified outbound: WhatsApp → Email → GitHub fallback
+  settings.ts       — Runtime feature flags (DB → env → false, 30s cache)
+  adminAuth.ts      — Admin session verification
+  supabase/client.ts — createServerClient() uses SUPABASE_SERVICE_ROLE_KEY
+supabase/migrations/ — 001–018; never edit applied migrations
+messages/           — i18n: es.json + en.json
 ```
 
-### Rutas del sitio
-- `/` o `/es` → Landing en español
-- `/en` → Landing en inglés
-- `/pools` o `/es/pools` → Pools activos en español
-- `/en/pools` → Pools activos en inglés
+### Critical Invariants
 
-### Inteligencia competitiva (verificada mayo 2026)
-| Competidor | Precio | Ruta | Notas |
-|---|---|---|---|
-| Casillero Guangzhou→Panamá (real, publicado) | **$420/m³** (≥1 CBM) · **$600/m³** (<1 CBM = $17/ft³) | GZH → Panamá | 45–55 días, salidas quincenales |
-| LMA Global Logistics | $285/m³ | Yiwu → Villa Zaita | 37 días, 2x/mes, warehouse-to-warehouse |
-| Broker DDP (promedio) | $500–800/m³ | China → Panamá DDP | incluye aduanas y entrega |
-| **FINDIT pool lleno** | **$180–250/m³** | GZH/SHA/SZH → Colón | precio baja según volumen |
+**Supabase client:** Always use `createServerClient()` (service role) in API routes. The exported `supabase` (anon) is for client-side only. RLS revokes all anon access (migration 013) — anon reads will return empty, not errors.
 
-**Ventaja vs. competidor principal:** 40–57% más barato que el casillero ($420), comparable a LMA ($285) con ventaja de precio dinámico
+**Pool join is atomic:** All three join paths (`/shipments/[id]/assign`, `/orders/[id]/join-pool`, `assignShipmentToPool`) must go through `joinPoolAtomic()` in `lib/poolAssignment.ts`, which calls the `join_pool()` SQL function. Never write volume/price updates directly — the SQL function holds the SELECT FOR UPDATE lock.
 
-### Motor de precios (lib/pricing.ts) — ACTUALIZADO
-**Precio de referencia:** $285/m³ (igual a LMA = ya somos competitivos en el peor caso)
-**Duración del pool:** 10 días · **Embarques:** cada 15 días
-**Mínimo por cliente:** 0.5 m³ (forwarder cobra 1 CBM mínimo de todas formas)
+**Pricing parity:** `lib/pricing.ts` and the SQL functions `findit_carrier_rate()` / `findit_client_price()` (migration 012) must stay in sync. `tests/unit/pricing.test.ts` + `tests/pricing-parity.spec.ts` guard this. If you change `pricing.ts`, update the SQL too.
 
-#### Modo de envío automático (LCL → FCL)
-| Volumen pool | Modo | Costo/m³ aprox | Nota |
-|---|---|---|---|
-| 0–19 m³ | LCL consolidado | $82–100/m³ | tramos por volumen |
-| 20–40 m³ | FCL 20ft (~$2,000) | $80–100/m³ | más estable |
-| ≥41 m³ | FCL 40ft (~$3,200) | $58–78/m³ | precio óptimo |
+**Feature flags:** `isEnabled(key)` in `lib/settings.ts` reads `app_settings` table (toggleable at /admin/autonomia without redeploy). All four flags default to `false` — nothing autonomous fires without explicit activation.
 
-#### Tramos LCL (costo del naviero, LCL)
-| Volumen pool | Costo naviero |
-|---|---|
-| 0–5 m³ | $100 |
-| 5–15 m³ | $92 |
-| 15–20 m³ | $87 |
-| +20 m³ | $82 (o FCL) |
+### Pool Lifecycle
 
-#### Distribución del ahorro por día de entrada ✅ CONFIRMADO
-| Día entrada | Días restantes | % cliente | % FINDIT |
-|---|---|---|---|
-| Día 1 | 10 días | 90% | 10% |
-| Día 2 | 9 días | 80% | 20% |
-| Día 3 | 8 días | 70% | 30% |
-| Día 4 | 7 días | 60% | 40% |
-| Día 5 | 6 días | 50% | 50% |
-| Día 6 | 5 días | 40% | 60% |
-| Día 7 | 4 días | 30% | 70% |
-| Día 8 | 3 días | 20% | 80% |
-| Día 9 | 2 días | 10% | 90% |
-| Día 10 | 1 día | 10% (piso) | 90% |
+```
+active → closed → in_transit → at_colon → at_tocumen → completed
+```
 
-**Ejemplo confirmado (precio base $100, naviero baja a $90 = ahorro $10):**
-- Cliente entró día 1 → paga **$91**, FINDIT gana **$1/m³**
-- Cliente entró día 5 → paga **$95**, FINDIT gana **$5/m³**
+State transitions happen in `POST /api/pools/[pool_number]/status`. The cron (`/api/cron/advance-pools`, daily, guarded by `CRON_SECRET`) auto-closes pools at day 10 and guarantees one active pool per origin at all times.
 
-### Datos mock de pools (para demostración)
-| Pool | Ruta | Volumen | Participantes | Día |
-|---|---|---|---|---|
-| 1 | Shanghai → Colón | 8.5 m³ | 6 | Día 3 |
-| 2 | Guangzhou → Colón | 2.1 m³ | 2 | Día 1 |
-| 3 | Shenzhen → Colón | 16.4 m³ | 11 | Día 7 |
+### i18n Routing
+
+`middleware.ts` handles both locale routing (via next-intl) and admin auth redirect. API routes (`/api/*`) are excluded from the matcher — they never go through intl middleware. Pages live under `app/[locale]/`.
+
+### Notification Dispatcher (`lib/notify.ts`)
+
+Auto-selects channel by env presence: `WHATSAPP_TOKEN+WHATSAPP_PHONE_ID` → `RESEND_API_KEY+NOTIFY_EMAIL_FROM` → `GITHUB_TOKEN_NOTIFY` (GitHub Issue as inbox). Returns `{ channel, ok }`. Never throws — fails open.
+
+### Migrations
+
+Migrations 001–018 are applied in production. New migrations go in `supabase/migrations/` with the next number prefix. `npm run db:push` applies them. Never edit an already-applied migration.
 
 ---
 
-## 3. SUPUESTOS CRÍTICOS (ESTADO ACTUAL)
+## Project Context
 
-| # | Supuesto | Crítico | Status | Validación necesaria |
-|---|----------|---------|--------|----------------------|
-| 1 | Existe demanda (100+ micro-importadores) | SÍ | 🔴 NO VALIDADO | Contactar 10-15 importadores vía redes |
-| 2 | Forwarders aceptan tier pricing dinámico | SÍ | 🔴 NO VALIDADO | Contactar 3+ forwarders, obtener tabla precios |
-| 3 | Margen ≥12% es viable | SÍ | 🟡 FRÁGIL | Depende de volumen 6m³+ |
-| 4 | Regulación aduanal permite estructura | SÍ | 🔴 NO VALIDADO | Consultar agente aduanal Panamá |
-| 5 | Clientes aceptan esperar 10 días | SÍ | 🔴 NO VALIDADO | Encuesta directa a 10 importadores |
+**Product:** LCL freight consolidator China → Panama. Groups micro-importers into 10-day pools; price drops as volume grows. Break-even at ~8 m³/month.
 
----
+**Pricing model:** Reference price $285/m³ (at minimum volume). Client discount scales with pool fill level and day-of-entry. FINDIT margin = carrier cost delta × (1 - client_share%).
 
-## 4. DECISIONES CONFIRMADAS
+**Key tables:** `clients`, `pools`, `shipments`, `pool_members`, `orders`, `leads`, `invoices`, `payments`, `admin_users`, `admin_sessions`, `app_settings`, `audit_log`, `rate_limits`.
 
-✓ Estándar W/M (cobrar mayor entre volumen/peso)
-✓ Pool 10 días fijos (embarques cada 15 días)
-✓ Múltiples forwarders (mín 2)
-✓ MVP manual (Excel + WhatsApp)
-✓ Cliente paga 50%+50%
-✓ Distribución ahorro: día 1=90% → día 10=10% (piso), -10% por día
-✓ Precio de referencia = techo máximo ($100/m³)
-✓ Precio real siempre ≤ precio de referencia
-✓ Bodega Guangzhou + Panamá
-✓ Estructura legal: Consolidador importador oficial
-✓ Sitio bilingüe ES/EN con routing automático
+**Admin credentials (local only):** enrique.eaguilarh@gmail.com — never commit credentials.
 
 ---
 
-## 5. MODELO FINANCIERO
+## Rules
 
-**Proyección 3 meses:**
-
-| Métrica | Mes 1 | Mes 2 | Mes 3 |
-|---------|-------|-------|-------|
-| Volumen | 1m³ | 2m³ | 4m³ |
-| Ingresos | $155 | $310 | $620 |
-| Costos | $3,900 | $4,100 | $4,300 |
-| Margen neto | -$3,745 | -$3,790 | -$3,680 |
-
-**Burn rate:** $2,600/mes
-**Capital requerido:** $25K (3 meses MVP)
-**Break-even:** Mes 5-6 (si volumen crece a 8m³+/mes)
-
----
-
-## 6. PLAN DE VALIDACIÓN (90 DÍAS)
-
-### FASE 1: Supuestos críticos (Semana 1)
-
-**Tarea 1.1:** Validar forwarders
-- Contactar 5-7 forwarders en Guangzhou/Shanghai
-- Obtener tabla precios: 1m³, 3m³, 6m³, 10m³
-- Pregunta clave: "¿Si cierro con 2m³, qué tarifa aplicas?"
-- **Resultado esperado:** 2+ forwarders dan tabla clara = VALIDADO
-
-**Tarea 1.2:** Identificar demanda
-- Contactar 15 micro-importadores en Facebook, LinkedIn, OLX Panamá
-- Pregunta: "¿Cuánto pagas hoy? ¿Esperas 10 días por 20-30% descuento?"
-- **Resultado esperado:** 70%+ dicen SÍ = VALIDADO
-
-**Tarea 1.3:** Validación aduanal
-- Contactar agente aduanal Panamá
-- Pregunta: "¿Puedo importar como consolidador con múltiples clientes finales?"
-- **Resultado esperado:** Aduanas dice "viable" = VALIDADO
-
-**Decisión GO/NO-GO:** Si 2 de 3 tareas pasan, continúa a Fase 2.
-
----
-
-## 7. CAPITAL REQUERIDO
-
-**MVP Fase 1 (3 meses): $25,000**
-
-| Item | Costo |
-|------|-------|
-| Bodega China (3 meses) | $2,400 |
-| Bodega Panamá (3 meses) | $2,400 |
-| Operador logístico | $6,000 |
-| Agente aduanal | $1,500 |
-| Consultoría legal | $1,500 |
-| Marketing | $2,000 |
-| Contingencia (20%) | $4,700 |
-| **TOTAL** | **$25,000** |
-
----
-
-## 8. ESTADO ACTUAL
-
-**Fecha:** 2 de junio de 2026 (actualizado)
-**Fase:** 🟢 MVP TÉCNICO COMPLETO Y EN PRODUCCIÓN — DIFERENCIADORES + AUTONOMÍA DEPLOYADOS
-**Sitio:** https://logistic-six-alpha.vercel.app — deploy automático desde `main` vía GitHub Actions
-**Validación operativa:** 🟡 LISTA PARA COMENZAR
-**Capital:** NO INVERTIDO AÚN
-
-### GitHub Secrets configurados:
-- VERCEL_TOKEN, VERCEL_ORG_ID (`team_BrCUd1PJnqaQTOuhJFrDYsw3`), VERCEL_PROJECT_ID (`prj_S68LtSo2WYgAxmp7NFOF5Hxw1qz5`)
-- ADMIN_SETUP_KEY, CRON_SECRET, SUPABASE_ACCESS_TOKEN y demás
-
-### Sistema en producción (29 mayo 2026 — estado final):
-- ✅ Auth admin completa — login seguro en /admin/login (httpOnly cookie 24h)
-- ✅ Dashboard KPIs — /admin/dashboard con revenue, pools, facturas pendientes
-- ✅ Gestión de envíos — /admin/envios con filtros y acción WhatsApp
-- ✅ Estado de facturas para clientes — /factura/estado (búsqueda por código FDT)
-- ✅ JoinPoolModal conectado a DB — leads se guardan en Supabase
-- ✅ Landing con stats en vivo — HeroSection lee datos reales de Supabase
-- ✅ Migraciones 001-018 aplicadas en producción
-- ✅ **Race condition eliminada**: join_pool() atómica con FOR UPDATE
-- ✅ **RLS PII lockdown** (migración 013): anon = zero acceso
-- ✅ **Rate limiting durable**: tabla rate_limits + RPC
-- ✅ **Autopilot cron 8 pasos**: avanza día, cierra pools, auto-sana volumen, garantiza pool activo, lifecycle notifs, GA optimizer, pool alerts, lead nurture
-- ✅ **Motor de notificaciones**: WhatsApp → email → GitHub fallback
-- ✅ **Conciliación real**: pool_settlement view + /api/admin/settlement
-- ✅ **Crecimiento orgánico**: referidos, sitemap dinámico, JSON-LD, OG cards WhatsApp
-- ✅ **[NUEVO] WhatsApp Bot**: /api/whatsapp/webhook — precio/tracking/pools/unirse sin salir de WA
-- ✅ **[NUEVO] Pool Intelligence Engine**: lib/poolIntelligence.ts — velocidad FCL, alertas proactivas a leads, dashboard en /admin/autonomia
-- ✅ **[NUEVO] Algoritmo genético (GA)**: lib/poolOptimizer.ts — asignación óptima DEAP-style, seed diario determinista
-- ✅ **[NUEVO] Timeline visual**: /seguimiento rediseñado con stepper animado de 6 pasos + panel ahorro vs casillero
-- ✅ Cuenta admin: enrique.eaguilarh@gmail.com / Findit2026! (insertada directo en DB vía SQL)
-- ✅ Bug /api/admin/setup corregido: ahora usa bcrypt + admin_users (no Supabase Auth)
-- ✅ Next.js 14.2.29 (parche CVE crítico aplicado)
-
-### Páginas del sistema (20 páginas):
-**Públicas:** /, /pools, /pools/[pool_number], /pools/unirme, /registro, /mis-pedidos, /seguimiento, /factura/[token], /factura/estado
-**Admin:** /admin, /admin/dashboard, /admin/login, /admin/leads, /admin/pools, /admin/pools/[id], /admin/pools/[id]/aduana, /admin/proveedores, /admin/envios, /admin/autonomia
-
-### Supabase DB — Tablas:
-clients, pools, shipments, pool_members, orders, providers, provider_rates, leads, invoices, payments, admin_users, admin_sessions, audit_log, rate_limits, lead_followups, app_settings
-
-### Capa de autonomía & evolución (3 fases — mayo 31, 2026):
-**FASE 1 — Lazo de comunicación:** notificaciones automáticas de ciclo de vida del pool
-(closed→in_transit→at_colon→at_tocumen→completed) a todos los miembros vía notify().
-Wired en /api/pools/[n]/status (manual) y en el cron (auto-close). lib/lifecycleNotify.ts
-+ buildLifecycleMessage() en lib/notifications.ts. Doble candado: notify() retorna 'none' sin
-credenciales + flag notifications_enabled.
-
-**FASE 2 — Control en runtime:** tabla app_settings + lib/settings.ts (isEnabled/setSetting con
-caché 30s y fallback a env). Endpoints /api/admin/settings (GET/PATCH) y UI en /admin/autonomia
-(toggles sin redeploy). Reconciliación: vista outstanding_debt + /api/admin/reconciliation
-(deuda por cobrar). Idempotencia en /api/payments (idempotency_key). Opt-out de leads:
-/api/leads/optout?token= + columna leads.opted_out (respetado en el nurture).
-
-**FASE 3 — Optimización evolutiva (DEAP-style en TS):** lib/poolOptimizer.ts — algoritmo genético
-(torneo + cruce uniforme + mutación + elitismo, RNG determinista por seed) que optimiza la
-asignación CONJUNTA de envíos pendientes a pools. Fitness multi-objetivo: margen FINDIT + ahorro
-cliente + bonus por cruzar umbral FCL. Endpoint /api/admin/optimize-assignment (dry-run por
-defecto, apply=true ejecuta vía joinPoolAtomic). 7 tests en tests/unit/poolOptimizer.test.ts.
-
-**FASE 4 — Diferenciadores competitivos (2 junio 2026):**
-- **Pool Intelligence Engine** (lib/poolIntelligence.ts): velocidad m³/día (ventana 3 días), predicción
-  días hasta FCL, probabilidad FCL crossing (0–1), alerta proactiva a leads cuando pool ≥60%.
-  Dashboard en /admin/autonomia. Flag: pool_alerts_enabled. API: GET /api/admin/pool-intelligence.
-- **WhatsApp Bot** (/api/whatsapp/webhook): canal primario para micro-importadores — cotizar precio
-  en tiempo real, tracking por código FDT, ver pools activos, cómo unirse. Siempre retorna HTTP 200.
-  Verificación GET + mensajes POST. Activar con WHATSAPP_VERIFY_TOKEN en Vercel.
-- **Timeline visual** (/seguimiento): stepper animado 6 pasos con ETAs automáticos + panel ahorro vs casillero.
-
-### Testing:
-- `npm test` → vitest, 49 unit tests (pricing + poolAssignment + poolOptimizer). vitest.config.ts.
-- `npm run test:e2e` → playwright (requiere browser + acceso a Vercel).
-
-### Feature flags (todos APAGADOS por defecto — toggle en /admin/autonomia):
-- `notifications_enabled` — notificaciones ciclo de vida (requiere WHATSAPP_TOKEN o RESEND_API_KEY)
-- `nurture_enabled` — follow-up automático a leads
-- `optimizer_auto_apply` — GA aplica asignación sin confirmar (migración 017)
-- `pool_alerts_enabled` — alertas proactivas FCL a leads (migración 018)
-
-### Pendiente técnico (menor):
-- Configurar WHATSAPP_VERIFY_TOKEN + WHATSAPP_TOKEN + WHATSAPP_PHONE_ID en Vercel para activar bot WA
-- O configurar RESEND_API_KEY + NOTIFY_EMAIL_FROM para canal email
-- Agregar GITHUB_TOKEN_NOTIFY en Vercel para fallback de leads a GitHub Issues
-- Probar flujo completo E2E: registro → envío → factura → aduana
-- Activar flags en /admin/autonomia cuando credenciales estén en Vercel
-
-### Para retomar en sesión nueva:
-Escribe: `continuamos` — si los tokens no están cargados, el asistente los pedirá.
-Los tokens están guardados en `/root/.claude/.tokens` (solo en el contenedor local).
-
----
-
-## 9. PROTOCOLO AUTOMÁTICO
-
-### Cuando abras nuevo chat:
-1. Di `continuamos` o `MEMORIA SYNC`
-2. Yo leo este archivo
-3. Tengo contexto completo — técnico y de negocio
-4. Retomamos desde donde estábamos
-
-### Credenciales de acceso
-- Tokens guardados localmente en `/root/.claude/.tokens` (nunca en GitHub)
-- Al iniciar sesión, cargar con: `source /root/.claude/.tokens`
-- Configurar remote: `git remote set-url origin https://${GITHUB_TOKEN}@github.com/FindITCorp/logistic.git`
-- Si el archivo no existe, pedirle al usuario los tokens (GitHub PAT + Vercel token)
-
-### Regla para el asistente:
-- Al leer `continuamos`: ejecutar el comando de remote de arriba inmediatamente
-- **SIEMPRE** actualizar esta MEMORIA.md al final de cada sesión con cambios relevantes
-- **SIEMPRE** hacer commit + push junto con cualquier cambio de código
-- Push siempre a `main` para triggear deploy automático en Vercel
-- Rama de trabajo activa: `main`
-
----
-
-**Este archivo es la fuente de verdad del proyecto.**
-
----
-
-## REGLAS DE TRABAJO
-
-- Push siempre a `main` → dispara deploy en Vercel
-- NUNCA subir tokens a GitHub
-- Actualizar CLAUDE.md + MEMORIA.md al final de cada sesión
-- Commit + push de ambos archivos junto con cualquier cambio de código
-
-## SKILLS — ACTIVACIÓN AUTOMÁTICA POR TAREA
-
-Estas skills están instaladas en `~/.claude/skills/`. **Invócalas con el tool `Skill` antes de comenzar** según el tipo de tarea:
-
-| Skill | Cuándo invocarla |
-|-------|-----------------|
-| `nextjs-developer` | Cambios en páginas, componentes, App Router, Server Components, rutas API |
-| `vercel-optimize` | Optimización de deploy, Core Web Vitals, Edge Functions, config de Vercel |
-| `qa-expert` | Crear tests, plan QA, cobertura, bugs |
-| `playwright-skill` | Tests E2E, flujos de usuario, pruebas de integración |
-| `debugger` | Diagnosticar errores, analizar stack traces, bugs de producción |
-| `code-review` | Revisar PR, auditar cambios antes de mergear |
-| `security-review` | Auditar seguridad: RLS, auth, rate limiting, OWASP |
-| `deap` | Mejoras al algoritmo genético en `lib/poolOptimizer.ts` |
-| `deep-research` | Investigar competidores, tarifas de forwarders, regulación aduanal |
-
-**Regla:** Si la tarea toca Next.js → invocar `nextjs-developer` primero. Si toca tests → invocar `qa-expert`. Si es un bug → invocar `debugger`. No esperes a que el usuario lo pida.
-
-## STACK
-
-Next.js 14 + next-intl + Tailwind CSS — repo: FindITCorp/logistic
+- Push to `main` → triggers Vercel deploy automatically
+- Tokens live in `/root/.claude/.tokens` — never in git
+- Update this file + MEMORIA.md at end of each session with relevant changes
+- Always commit + push alongside code changes
+- Skills: invoke `nextjs-developer` for pages/components/API routes, `qa-expert` for tests, `debugger` for bugs, `deap` for poolOptimizer changes
