@@ -62,45 +62,18 @@ with open(path, "w") as f:
     json.dump(cfg, f, indent=4)
 PYEOF
 
-# ── 5. Resumen de contexto ────────────────────────────────────────────────────
-echo ""
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║         FINDIT LOGISTIC — CONTEXTO DE SESIÓN             ║"
-echo "╚══════════════════════════════════════════════════════════╝"
-echo ""
-
-BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "desconocida")
+# ── 5. Resumen de contexto (compacto) ────────────────────────────────────────
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
 LAST_COMMIT=$(git log -1 --format="%h %s" 2>/dev/null || echo "sin commits")
 UNPUSHED=$(git rev-list "origin/${BRANCH}..HEAD" --count 2>/dev/null || echo "0")
-
-echo "📁 Proyecto:    FINDIT Logistic (finditcorp/logistic)"
-echo "🌿 Rama:        ${BRANCH}"
-echo "📝 Último commit: ${LAST_COMMIT}"
-if [ "$UNPUSHED" -gt "0" ]; then
-  echo "⚠️  Commits sin push: ${UNPUSHED}"
-fi
-
-if [ -f "MEMORIA.md" ]; then
-  MEMORIA_DATE=$(head -3 MEMORIA.md | grep "Última actualización" | sed 's/.*: //' || echo "desconocida")
-  echo "🧠 MEMORIA.md:  ${MEMORIA_DATE}"
-fi
-
-echo ""
-echo "🌐 Sitio live:  https://logistic-six-alpha.vercel.app"
-echo "🔐 Admin:       /admin/login (enrique.eaguilarh@gmail.com)"
-echo ""
-echo "🚦 Feature flags (toggle en /admin/autonomia):"
-echo "   • notifications_enabled  • nurture_enabled"
-echo "   • optimizer_auto_apply   • pool_alerts_enabled"
-echo ""
-echo "🔑 Tokens:      $([ -f '/root/.claude/.tokens' ] && echo '✅ Cargados' || echo '❌ FALTAN — pedir al usuario')"
-echo ""
-
-# Listar skills restauradas/disponibles
+MEMORIA_DATE=$(grep "Última actualización" MEMORIA.md 2>/dev/null | head -1 | sed 's/.*: //' || echo "?")
+TOKENS_OK=$([ -f '/root/.claude/.tokens' ] && echo '✅ Cargados' || echo '❌ FALTAN — pedir al usuario')
 SKILLS_OK=$(ls "$SKILLS_DIR" 2>/dev/null | wc -l || echo "0")
-echo "🛠️  Skills disponibles: ${SKILLS_OK} (find-skill, nextjs-developer, debugger, qa-expert, vercel-optimize, deap)"
+UNPUSHED_WARN=$([ "${UNPUSHED}" -gt "0" ] && echo " | ⚠️ ${UNPUSHED} sin push" || echo "")
+
 echo ""
-echo "📌 Leer MEMORIA.md y CLAUDE.md para contexto completo."
-echo "   Invocar la skill relevante ANTES de empezar cada tarea."
-echo "══════════════════════════════════════════════════════════════"
+echo "FINDIT LOGISTIC | rama: ${BRANCH}${UNPUSHED_WARN}"
+echo "Commit: ${LAST_COMMIT}"
+echo "MEMORIA.md: ${MEMORIA_DATE} | Tokens: ${TOKENS_OK} | Skills: ${SKILLS_OK}"
+echo "Links: https://logistic-six-alpha.vercel.app | /admin/login (enrique.eaguilarh@gmail.com)"
 echo ""
