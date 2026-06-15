@@ -294,3 +294,27 @@ Panel de ahorro: muestra `(420 - precio_bloqueado) * volumen` vs casillero cuand
 ---
 
 **Este archivo es la fuente de verdad técnica del proyecto.**
+
+---
+
+## 15. CALIBRACIÓN PRONÓSTICOS MUNDIAL 2026
+
+**Actualizado:** 2026-06-15 — validado con resultado Bélgica 1-1 Egipto
+
+### Sesgo detectado
+El modelo inicial inflaba resultados a favor de favoritos históricos (predijo Bélgica 2-0 Egipto, resultado real 1-1).
+
+### Criterios ajustados
+
+| Criterio | Antes | Ajustado |
+|----------|-------|---------|
+| Diferencia de goles típica | 2-3 goles | **máx 1-2 goles** |
+| Probabilidad base de empate | ~15% | **~25-30%** |
+| Equipos africanos/asiáticos | Subestimados | **Organizados defensivamente, capaces de empatar a cualquiera** |
+| Resultados 3-0 o más | Frecuentes | **Raros, solo ante diferencia enorme** |
+| Marcadores más probables | 2-0, 3-0 | **1-0, 1-1, 2-1** |
+
+### Regla práctica
+- **Favorito claro:** predecir 1-0 o 2-1, nunca más de 2 goles de margen
+- **Favorito leve:** predecir empate como opción primaria, victoria por 1 gol
+- **Partido parejo:** empate como resultado más probable
