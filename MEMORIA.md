@@ -297,24 +297,41 @@ Panel de ahorro: muestra `(420 - precio_bloqueado) * volumen` vs casillero cuand
 
 ---
 
-## 15. CALIBRACIÓN PRONÓSTICOS MUNDIAL 2026
+## 15. MODELO DE PRONÓSTICOS MUNDIAL 2026
 
-**Actualizado:** 2026-06-15 — validado con resultado Bélgica 1-1 Egipto
+**Actualizado:** 2026-06-15
 
-### Sesgo detectado
-El modelo inicial inflaba resultados a favor de favoritos históricos (predijo Bélgica 2-0 Egipto, resultado real 1-1).
+### Fuente de verdad: modelo cuantitativo (NO heurística manual)
 
-### Criterios ajustados
+El pronóstico se genera con el modelo en `mundial2026/` (rama `claude/sleepy-bohr-PDVSt`):
+- **Elo dinámico** construido sobre **26,569 partidos históricos reales** (tabla `team_matches`), con decay temporal y ancla FIFA (30%).
+- Ratings de jugadores + estimación de alineaciones + análisis línea por línea.
+- Correr: `python predict.py --home "X" --away "Y" [--neutral]`
+- Evolución: cada resultado real → `scripts/fetch_daily_results.py` (`register_match()`) actualiza Elo → se re-predice.
 
-| Criterio | Antes | Ajustado |
-|----------|-------|---------|
-| Diferencia de goles típica | 2-3 goles | **máx 1-2 goles** |
-| Probabilidad base de empate | ~15% | **~25-30%** |
-| Equipos africanos/asiáticos | Subestimados | **Organizados defensivamente, capaces de empatar a cualquiera** |
-| Resultados 3-0 o más | Frecuentes | **Raros, solo ante diferencia enorme** |
-| Marcadores más probables | 2-0, 3-0 | **1-0, 1-1, 2-1** |
+### Corrección de auditoría (2026-06-15)
 
-### Regla práctica
-- **Favorito claro:** predecir 1-0 o 2-1, nunca más de 2 goles de margen
-- **Favorito leve:** predecir empate como opción primaria, victoria por 1 gol
-- **Partido parejo:** empate como resultado más probable
+La nota previa ("predijo Bélgica 2-0 Egipto, real 1-1") era **inverificable**: en la DB del modelo NO existe ese partido. El último registrado de Bélgica fue **2-0 vs Croacia** (amistoso, 3-jun); no hay Bélgica-Egipto reciente. **Regla descartada:** no se ajusta el modelo con partidos fantasma ni heurísticas a mano (la de "máx 2 goles" era redundante — el Elo ya produce márgenes bajos por sí solo).
+
+### Estado de datos al 2026-06-15
+- Último partido registrado: **2026-06-03** (amistosos).
+- Partidos del Mundial jugados: **0** de 72 fixtures.
+- **No hay resultados nuevos para alimentar el modelo.** El pipeline diario (`fetch-football-results.yml`) devuelve vacío porque aún no han entrado partidos competitivos. No se fuerza ninguna "evolución" sin datos.
+
+### Candidato real de calibración (pendiente de partidos jugados)
+El modelo promedia **~1.25 goles/partido** en los 8 pronósticos del 17-18 jun, vs **~2.5-2.7** históricos de Mundial → probablemente **subestima el total de goles**. Ajustar SOLO con partidos jugados, no por intuición.
+
+### Baseline del modelo — jornada 17-18 jun (para contrastar vs resultado real)
+
+| Partido | Modelo | Conf. | Elo (L–V) |
+|---|---|---|---|
+| Portugal–DR Congo | 2-0 | Baja | 1793–1621 |
+| Inglaterra–Croacia | 1-0 | Baja | 1879–1737 |
+| Ghana–Panamá | 1-1 | Baja | 1611–1661 |
+| Uzbekistán–Colombia | 0-1 | Baja | 1695–1727 |
+| Rep. Checa–Sudáfrica | 1-0 | Baja | 1602–1597 |
+| Suiza–Bosnia | 1-0 | Baja | 1735–1534 |
+| Canadá–Catar | 1-0 | Media | 1666–1541 |
+| México–Corea del Sur | 1-0 | Baja | 1747–1747 |
+
+> Nota: el calendario interno del modelo ubica México-Corea y Canadá-Catar el 17-jun (la fixture pública del usuario decía 18). El registro de resultados (`scripts/register_wc_jornada.py`) resuelve por nombre de equipo, no por fecha.
