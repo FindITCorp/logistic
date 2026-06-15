@@ -1,0 +1,14 @@
+{
+  "jornada": "Mundial 2026 — 17-18 jun",
+  "instrucciones": "Rellena home_goals/away_goals con el marcador final real (deja null si aun no se ha jugado). Luego corre: python scripts/register_wc_jornada.py data/pending_results/2026-06-17_18.json",
+  "matches": [
+    {"date": "2026-06-17", "competition": "FIFA World Cup", "group": "K", "home": "Portugal", "away": "DR Congo", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-17", "competition": "FIFA World Cup", "group": "L", "home": "England", "away": "Croatia", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-17", "competition": "FIFA World Cup", "group": "L", "home": "Ghana", "away": "Panama", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-17", "competition": "FIFA World Cup", "group": "K", "home": "Uzbekistan", "away": "Colombia", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-18", "competition": "FIFA World Cup", "group": "A", "home": "Czechia", "away": "South Africa", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-18", "competition": "FIFA World Cup", "group": "B", "home": "Switzerland", "away": "Bosnia and Herzegovina", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-18", "competition": "FIFA World Cup", "group": "B", "home": "Canada", "away": "Qatar", "home_goals": null, "away_goals": null},
+    {"date": "2026-06-18", "competition": "FIFA World Cup", "group": "A", "home": "Mexico", "away": "South Korea", "home_goals": null, "away_goals": null}
+  ]
+}
